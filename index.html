@@ -89,6 +89,13 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
 .lock label.chk{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:14px}
 .err{color:var(--onair);font-size:14px;min-height:1.2em;margin:0}
 .foot{font-size:12px;color:var(--muted)}
+.field{font:15px var(--body);padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%;min-width:0}
+textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
+.fl{display:flex;flex-direction:column;gap:4px;min-width:0}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:14px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.warn{color:var(--save)} .good{color:var(--ok)}
+.confirm{background:var(--savebg);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
 </style>
 </head>
 <body>
@@ -113,6 +120,7 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
     <nav class="tabs" role="tablist" id="tabs">
       <button type="button" role="tab" data-tab="roles" aria-selected="true">Advertised roles</button>
       <button type="button" role="tab" data-tab="outreach" aria-selected="false">Speculative emails</button>
+      <button type="button" role="tab" data-tab="sent" aria-selected="false">Sent and replies</button>
       <button type="button" role="tab" data-tab="cvs" aria-selected="false">My CVs</button>
       <button type="button" role="tab" data-tab="stats" aria-selected="false">Stats</button>
       <button type="button" role="tab" data-tab="alerts" aria-selected="false">Job alerts</button>
@@ -138,9 +146,15 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
     </section>
 
     <section id="outreachView" hidden class="controls">
-      <p class="sub">Organisations where good roles are often filled without being advertised. Copy the address and the email into your own inbox, attach your CV, send, then tap Sent.</p>
+      <p class="sub">Organisations where good roles are often filled without being advertised. Tap Send from here to check the email, choose a language and CV, and send it. Or copy it into your own inbox if you prefer.</p>
       <div class="counts" id="ocounts"></div>
       <div id="olist" class="day"></div>
+    </section>
+
+    <section id="sentView" hidden class="controls">
+      <p class="sub">Everything you have sent from this page, and whether anyone has replied. Replies are checked each time you open this tab.</p>
+      <div class="counts" id="sentCounts"></div>
+      <div id="sentList" class="day"></div>
     </section>
 
     <section id="cvsView" hidden class="controls">
@@ -221,7 +235,7 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
   function showTab(t){
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats();
+    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats(); $('sentView').hidden = t !== 'sent'; if (t === 'sent') refreshSent();
   }
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
   $('catSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cat = b.dataset.cat; document.querySelectorAll('#catSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
@@ -283,6 +297,14 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
         if (!panel){ panel = el('div','panel'); renderDraft(panel, j); c.append(panel); }
         else panel.hidden = !panel.hidden;
         b.setAttribute('aria-expanded', String(!panel.hidden));
+      });
+    }
+    if (api()){
+      const sb = el('button','btn solid','Apply by email'); sb.type = 'button'; left.append(sb); let comp = null;
+      sb.addEventListener('click', () => {
+        if (comp){ comp.hidden = !comp.hidden; return; }
+        comp = composer({kind:'job', id:j.id, label: str(j.employer) + ', ' + str(j.title), to: j.applyEmail || '', subject: j.draft ? j.draft.subject : 'Application: ' + str(j.title), body: j.draft ? j.draft.email : '', cvKey: j.draft && j.draft.cv ? 'job:' + j.id : 'base', note: j.applyEmail ? '' : 'This advert may ask you to apply through a form. Only send by email if it gives an address.', onSent: () => { marks['job:' + j.id] = 'applied'; saveMarks(); }});
+        c.append(comp);
       });
     }
     row.append(left);
@@ -379,6 +401,14 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
       c.append(det);
       const row = el('div','row'); const left = el('div','acts');
       const href = safeUrl(o.url); if (href){ const a = el('a','open','Website'); a.href = href; a.target='_blank'; a.rel='noopener noreferrer'; left.append(a); }
+      if (api()){
+        const sb = el('button','btn solid','Send from here'); sb.type = 'button'; left.append(sb); let comp = null;
+        sb.addEventListener('click', () => {
+          if (comp){ comp.hidden = !comp.hidden; return; }
+          comp = composer({kind:'out', id:o.id, label: str(o.org), to: /@/.test(str(o.contact)) ? o.contact : '', subject: o.subject, body: o.email, cvKey:'base', lang: o.language, onSent: () => { marks['out:' + o.id] = 'sent'; saveMarks(); }});
+          c.append(comp);
+        });
+      }
       const acts = el('div','acts');
       [['applied','sent','Sent'],['pass','skip','Skip']].forEach(([cls,k,l]) => { const b = el('button','act ' + cls, l); b.type='button'; b.setAttribute('aria-pressed', String(s === k)); b.addEventListener('click', () => setMark(o,'out',k,renderOutreach)); acts.append(b); });
       row.append(left, acts); c.append(row);
@@ -512,6 +542,158 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
       const meta = el('div','meta'); meta.append(el('span',null,device(x.ua)), el('span',null,place(x.tz)));
       const lg2 = str(x.lang).slice(0,2).toLowerCase(); if (lg2) meta.append(el('span',null,(LANGS[lg2] || x.lang) + ' language setting'));
       c.append(meta); box.append(c);
+    });
+  }
+
+  /* ---------- send applications from this page ---------- */
+  const DRAFT = 'rundown.compose.';
+  let sendersP = null;
+  function getSenders(){ if (!sendersP) sendersP = call({action:'senders'}).catch(e => { sendersP = null; throw e; }); return sendersP; }
+  const LANGSET = [['en','EN'],['fr','FR'],['ru','RU'],['ar','ع']];
+  function field(tag, id, val, ph){ const i = document.createElement(tag); i.className = 'field'; i.id = id; if (val != null) i.value = val; if (ph) i.placeholder = ph; return i; }
+  function labelled(text, ctl){ const l = el('label','fl'); l.append(el('span','outh',text), ctl); return l; }
+  function opt(sel, v, t){ const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); }
+  function cvHtml(cv){
+    const e = s => x(s);
+    let h = '<html><head><meta charset="utf-8"><style>body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#16192a;margin:0}h1{font-size:20pt;margin:0;text-align:center}.c{text-align:center;color:#555;margin:2pt 0}h2{font-size:9.5pt;letter-spacing:1pt;text-transform:uppercase;color:#333;border-bottom:1px solid #999;margin:12pt 0 4pt;padding-bottom:2pt}p{margin:3pt 0}ul{margin:2pt 0 6pt;padding-left:14pt}li{margin:1pt 0}.r{font-weight:bold;margin-top:6pt}.d{color:#555;font-weight:normal}</style></head><body>';
+    h += '<h1>' + e(cv.name) + '</h1>';
+    if (cv.tagline) h += '<p class="c">' + e(cv.tagline) + '</p>';
+    if (cv.contact) h += '<p class="c">' + e(cv.contact) + '</p>';
+    if (cv.profile) h += '<h2>Profile</h2><p>' + e(cv.profile) + '</p>';
+    if (arr(cv.strengths).length) h += '<h2>Core strengths</h2><p>' + arr(cv.strengths).map(e).join(' &middot; ') + '</p>';
+    const rl = (a,b,c) => '<p class="r">' + e(a) + (b ? ', ' + e(b) : '') + (c ? ' <span class="d">&nbsp; ' + e(c) + '</span>' : '') + '</p>';
+    if (arr(cv.career).length){ h += '<h2>Career</h2>'; arr(cv.career).forEach(r => { h += rl(r.role, r.org, r.dates); if (arr(r.bullets).length) h += '<ul>' + arr(r.bullets).map(b => '<li>' + e(b) + '</li>').join('') + '</ul>'; }); }
+    if (arr(cv.earlier).length){ h += '<h2>Earlier career</h2>'; arr(cv.earlier).forEach(r => { h += rl(r.role, r.org, r.dates) + (r.note ? '<p>' + e(r.note) + '</p>' : ''); }); }
+    if (arr(cv.education).length){ h += '<h2>Education</h2>'; arr(cv.education).forEach(r => { h += rl(r.title, r.org, r.dates) + (r.note ? '<p>' + e(r.note) + '</p>' : ''); }); }
+    if (cv.languages || cv.skills){ h += '<h2>Languages and skills</h2>' + (cv.languages ? '<p><b>Languages:</b> ' + e(cv.languages) + '</p>' : '') + (cv.skills ? '<p>' + e(cv.skills) + '</p>' : ''); }
+    if (cv.interests) h += '<h2>Background and interests</h2><p>' + e(cv.interests) + '</p>';
+    return h + '</body></html>';
+  }
+  async function blobB64(blob){ return ub64(new Uint8Array(await blob.arrayBuffer())); }
+
+  function composer(o){
+    const key = DRAFT + o.kind + ':' + o.id, uid = (o.kind + o.id).replace(/[^a-z0-9]/gi,'');
+    let st8 = {}; try { st8 = JSON.parse(ls(key) || '{}') || {}; } catch(e){ st8 = {}; }
+    const versions = st8.versions || {en:{subject: str(o.subject), body: str(o.body)}};
+    const startLang = /^(fr|ru|ar)/i.test(str(o.lang)) && !st8.versions ? str(o.lang).slice(0,2).toLowerCase() : 'en';
+    if (startLang !== 'en'){ versions[startLang] = versions.en; versions.en = null; }
+    let lang = st8.lang || startLang;
+    const p = el('div','panel');
+    p.append(el('div','outh','Send from here'));
+    if (o.note) p.append(el('p','status warn', o.note));
+    const g = el('div','grid2');
+    const fromSel = field('select','from-' + uid); fromSel.disabled = true; opt(fromSel, '', 'Loading...');
+    const toIn = field('input','to-' + uid, st8.to != null ? st8.to : str(o.to), 'name@organisation.org'); toIn.type = 'email'; toIn.multiple = true; toIn.autocomplete = 'off';
+    g.append(labelled('From', fromSel), labelled('To', toIn)); p.append(g);
+    const track = document.createElement('input'); track.type = 'checkbox'; track.id = 'trk-' + uid; track.checked = st8.track !== false;
+    const trackL = el('label','chk'); trackL.append(track, el('span',null,'Also send replies to the media inbox, so they show on the Sent and replies tab')); trackL.hidden = true; p.append(trackL);
+    const seg = el('div','seg'); seg.setAttribute('aria-label','Language of the email');
+    LANGSET.forEach(([k,t]) => { const b = el('button',null,t); b.type = 'button'; b.dataset.lang = k; b.setAttribute('aria-pressed', String(k === lang)); seg.append(b); });
+    p.append(labelled('Language', seg));
+    const trNote = el('p','status'); p.append(trNote);
+    const subj = field('input','subj-' + uid); const body = field('textarea','body-' + uid); body.classList.add('letter');
+    p.append(labelled('Subject', subj), labelled('Covering email', body));
+    const g2 = el('div','grid2');
+    const cvSel = field('select','cv-' + uid); opt(cvSel, '', 'No CV'); allCvs().forEach(c => opt(cvSel, c.key, c.label + (c.key === o.cvKey && c.key !== 'base' ? ' (made for this role)' : '')));
+    cvSel.value = st8.cv != null ? st8.cv : (o.cvKey || 'base'); if (cvSel.selectedIndex < 0) cvSel.value = 'base';
+    const fmtSel = field('select','fmt-' + uid); opt(fmtSel,'pdf','PDF'); opt(fmtSel,'docx','Word'); opt(fmtSel,'both','PDF and Word'); fmtSel.value = st8.fmt || 'pdf';
+    g2.append(labelled('Attach CV', cvSel), labelled('As', fmtSel)); p.append(g2);
+    p.append(el('p','status','The CV is attached in English. Open My CVs to preview it first.'));
+    const sendB = el('button','btn solid','Send'); sendB.type = 'button'; const st = el('div','status'); st.setAttribute('aria-live','polite');
+    const r = el('div','acts'); r.append(sendB); p.append(r, st);
+    if (st8.sentAt) st.textContent = 'Already sent on ' + new Date(st8.sentAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) + '. You can send again if you need to.';
+
+    function persist(){ const was = versions[lang]; versions[lang] = {subject: subj.value, body: body.value, machine: !!(was && was.machine)}; st8 = Object.assign(st8, {versions, lang, to: toIn.value, track: track.checked, cv: cvSel.value, fmt: fmtSel.value, from: fromSel.value || st8.from}); ls(key, JSON.stringify(st8)); }
+    function showLang(){
+      const v = versions[lang] || {subject:'', body:''}; subj.value = v.subject; body.value = v.body;
+      const rtl = lang === 'ar'; body.dir = subj.dir = rtl ? 'rtl' : 'ltr';
+      seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+      trNote.className = 'status' + (lang !== 'en' && versions[lang] && versions[lang].machine ? ' warn' : '');
+      trNote.textContent = lang !== 'en' && versions[lang] && versions[lang].machine ? (lang === 'ar' ? 'Machine translation. Please have a fluent Arabic speaker check it before sending.' : 'Machine translation, as a starting point. Read it through and correct it before sending.') : '';
+    }
+    seg.addEventListener('click', async e => {
+      const b = e.target.closest('button'); if (!b || b.dataset.lang === lang) return;
+      persist(); const target = b.dataset.lang;
+      if (!versions[target]){
+        const srcLang = versions.en ? 'en' : Object.keys(versions).find(k => versions[k]);
+        const src = versions[srcLang];
+        trNote.className = 'status'; trNote.textContent = 'Translating...'; seg.querySelectorAll('button').forEach(x => x.disabled = true);
+        try { const res = await call({action:'translate', from: srcLang, to: target, texts:[src.subject, src.body]}); versions[target] = {subject: res.texts[0], body: res.texts[1], machine: true}; }
+        catch(err){ trNote.textContent = 'Translation did not work just now. Try again, or write it yourself.'; versions[target] = {subject:'', body:''}; }
+        seg.querySelectorAll('button').forEach(x => x.disabled = false);
+      }
+      lang = target; showLang(); persist();
+    });
+    [subj, body, toIn, cvSel, fmtSel].forEach(n => n.addEventListener('input', persist));
+    track.addEventListener('change', persist);
+    showLang();
+
+    let primary = '';
+    function syncTrack(){ trackL.hidden = !fromSel.value || fromSel.value === primary; }
+    getSenders().then(res => {
+      primary = res.primary; fromSel.replaceChildren();
+      [res.primary].concat(arr(res.aliases).filter(a => a !== res.primary)).forEach(a => opt(fromSel, a, a));
+      const pref = st8.from || ls('rundown.from'); if (pref && [...fromSel.options].some(x => x.value === pref)) fromSel.value = pref;
+      fromSel.disabled = false; syncTrack();
+    }).catch(() => { fromSel.replaceChildren(); opt(fromSel,'','Could not load addresses'); st.textContent = 'Sending is not available right now. Check your connection, or copy the email instead.'; });
+    fromSel.addEventListener('change', () => { ls('rundown.from', fromSel.value); persist(); syncTrack(); });
+
+    let confirmBox = null;
+    sendB.addEventListener('click', () => {
+      persist();
+      const to = toIn.value.trim();
+      if (!/^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}(\s*[,;]\s*[^\s@,;]+@[^\s@,;]+\.[a-z]{2,})*$/i.test(to)){ st.className = 'status warn'; st.textContent = 'Add the email address to send to.'; toIn.focus(); return; }
+      if (!subj.value.trim() || !body.value.trim()){ st.className = 'status warn'; st.textContent = 'The subject and covering email cannot be empty.'; return; }
+      if (!fromSel.value){ st.className = 'status warn'; st.textContent = 'Your sending addresses have not loaded yet.'; return; }
+      if (confirmBox) confirmBox.remove();
+      const cvItem = allCvs().find(c => c.key === cvSel.value);
+      confirmBox = el('div','confirm');
+      confirmBox.append(el('div',null,'Send to ' + to + ' from ' + fromSel.value + (cvItem ? ', with "' + cvItem.label + '" attached as ' + fmtSel.options[fmtSel.selectedIndex].text : ', with no CV attached') + '?'));
+      const yes = el('button','btn solid','Yes, send it'), no = el('button','btn','Not yet'); yes.type = no.type = 'button';
+      const rr = el('div','acts'); rr.append(yes, no); confirmBox.append(rr); r.after(confirmBox); yes.focus();
+      no.addEventListener('click', () => { confirmBox.remove(); confirmBox = null; });
+      yes.addEventListener('click', async () => {
+        yes.disabled = no.disabled = sendB.disabled = true; st.className = 'status'; st.textContent = 'Sending...';
+        try {
+          const files = [];
+          if (cvItem){
+            const nm = (str(cvItem.cv.name) || 'CV') + ' CV';
+            if (fmtSel.value !== 'docx') files.push({name: nm, html: cvHtml(cvItem.cv)});
+            if (fmtSel.value !== 'pdf') files.push({name: nm + '.docx', b64: await blobB64(await buildDocx(cvItem.cv)), mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+          }
+          const nameFrom = DATA.cvbase && DATA.cvbase.cv ? str(DATA.cvbase.cv.name) : '';
+          await call({action:'send', to, subject: subj.value.trim(), body: body.value, from: fromSel.value, name: nameFrom, trackReplies: track.checked, files, ref:{kind:o.kind, id:o.id, label:o.label, lang}});
+          st8.sentAt = Date.now(); ls(key, JSON.stringify(st8));
+          st.className = 'status good'; st.textContent = 'Sent from ' + fromSel.value + '. Replies will show on the Sent and replies tab.';
+          confirmBox.remove(); confirmBox = null;
+          if (o.onSent) o.onSent();
+        } catch(err){ st.className = 'status warn'; st.textContent = 'Not sent: ' + (err.message === 'off' ? 'sending is not switched on.' : err.message === 'failed' || /fetch/i.test(err.message) ? 'check your connection and try again.' : err.message); yes.disabled = no.disabled = false; }
+        sendB.disabled = false;
+      });
+    });
+    return p;
+  }
+
+  async function refreshSent(){
+    const box = $('sentList');
+    if (!api()){ box.replaceChildren(el('p','status','Sending is not switched on yet.')); return; }
+    box.replaceChildren(el('p','status','Checking for replies...'));
+    let res; try { res = await call({action:'sent'}); } catch(e){ box.replaceChildren(el('p','status','Could not load. Check your connection.')); return; }
+    const items = arr(res.items).slice().reverse();
+    const replied = items.filter(i => i.replies).length;
+    $('sentCounts').textContent = items.length + ' sent · ' + replied + ' with replies';
+    box.replaceChildren();
+    if (!items.length){ box.append(el('p','status','Nothing sent from this page yet.')); return; }
+    items.forEach(it => {
+      const c = el('article','slot ' + (it.ref && it.ref.kind === 'out' ? 'outreach' : 'comms'));
+      const top = el('div','top'); const h = el('div');
+      h.append(el('div','cat', (it.ref && it.ref.kind === 'out' ? 'Speculative' : 'Application') + ' · ' + new Date(it.t).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})), el('h2',null, (it.ref && it.ref.label) || it.subject), el('div','emp','To ' + it.to));
+      top.append(h, el('span','badge ' + (it.replies ? 'new' : ''), it.replies ? (it.replies === 1 ? 'Reply' : it.replies + ' replies') : 'Awaiting reply'));
+      c.append(top);
+      const meta = el('div','meta'); meta.append(el('span',null,'From ' + it.from), el('span',null,it.subject)); c.append(meta);
+      if (it.replies){ const m = el('div','mail'); m.append(el('div','subj', str(it.lastFrom) + ', ' + new Date(it.lastReply).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})), document.createTextNode(str(it.snippet) + (str(it.snippet).length >= 220 ? '...' : ''))); c.append(m); }
+      if (it.thread){ const a = el('a','open','Open in Gmail'); a.href = 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(it.account || it.from) + '#all/' + encodeURIComponent(it.thread); a.target = '_blank'; a.rel = 'noopener noreferrer'; const rw = el('div','acts'); rw.append(a); c.append(rw); }
+      box.append(c);
     });
   }
 

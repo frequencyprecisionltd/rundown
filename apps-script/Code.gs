@@ -13,6 +13,10 @@
  *   {action:"list", token}                              list shared CVs (labels and dates only)
  *   {action:"open", token, cv}                          publish the open CV (cv=null removes it)
  *   {action:"log", token}                               recent downloads (time, which code, device, time zone, language)
+ *   {action:"senders", token}                           addresses this account can send as (Gmail "Send mail as")
+ *   {action:"translate", token, texts, from, to}        machine translation as a starting point
+ *   {action:"send", token, to, subject, body, from, files, ref, trackReplies}  send an application with CV attached
+ *   {action:"sent", token}                              sent applications and whether anyone has replied
  *
  * The service never sees codes or readable CVs: browsers encrypt with the code before sending,
  * and the id is a one-way hash of the code.
@@ -62,6 +66,58 @@ function log_(id, e) {
   while (JSON.stringify(list).length > 8500) list.shift();
   PROPS.setProperty('log', JSON.stringify(list));
 }
+/* ---------- sending applications ---------- */
+function me_() { return Session.getEffectiveUser().getEmail(); }
+function emailOk_(s) { return /^[^\s@,;<>]+@[^\s@,;<>]+\.[a-z]{2,}$/i.test(s); }
+
+/** Run once from the editor after adding the sending code, so Google asks for permission to send mail. */
+function authorise() { Logger.log('Can send as: ' + [me_()].concat(GmailApp.getAliases()).join(', ')); LanguageApp.translate('hello', 'en', 'fr'); }
+
+function send_(b) {
+  var to = String(b.to || '').split(/[,;]/).map(function (s) { return s.trim(); }).filter(String);
+  if (!to.length || to.length > 5 || !to.every(emailOk_)) return { ok: false, error: 'Check the To address.' };
+  var subject = String(b.subject || '').slice(0, 300), body = String(b.body || '');
+  if (!subject || !body) return { ok: false, error: 'The subject and letter cannot be empty.' };
+  var from = String(b.from || ''), mine = me_(), aliases = GmailApp.getAliases();
+  var opts = { attachments: [] };
+  if (b.name) opts.name = String(b.name).slice(0, 80);
+  if (from && from !== mine) {
+    if (aliases.indexOf(from) < 0) return { ok: false, error: 'That From address is not set up yet.' };
+    opts.from = from;
+    if (b.trackReplies) opts.replyTo = from + ', ' + mine;
+  }
+  (b.files || []).slice(0, 3).forEach(function (f) {
+    var name = String(f.name || 'CV').replace(/[\\\/:*?"<>|]/g, '').slice(0, 120);
+    if (f.html) opts.attachments.push(Utilities.newBlob(String(f.html), 'text/html', name + '.html').getAs('application/pdf').setName(name + '.pdf'));
+    else if (f.b64) opts.attachments.push(Utilities.newBlob(Utilities.base64Decode(String(f.b64)), String(f.mime || 'application/octet-stream'), name));
+  });
+  GmailApp.sendEmail(to.join(','), subject, body, opts);
+  Utilities.sleep(1500);
+  var thread = '';
+  try { var th = GmailApp.search('in:sent to:(' + to[0] + ') subject:("' + subject.replace(/"/g, '') + '")', 0, 1); if (th.length) thread = th[0].getId(); } catch (e) {}
+  var list = sentList_();
+  list.push({ t: Date.now(), to: to.join(', '), subject: subject, from: from || mine, ref: b.ref || null, thread: thread });
+  while (list.length > 150) list.shift();
+  save_('sent', JSON.stringify(list));
+  return { ok: true, thread: thread };
+}
+function sentList_() { try { return JSON.parse(load_('sent') || '[]'); } catch (e) { return []; } }
+function sentStatus_() {
+  var mine = [me_()].concat(GmailApp.getAliases()).map(function (s) { return s.toLowerCase(); });
+  return sentList_().map(function (s) {
+    var r = { t: s.t, to: s.to, subject: s.subject, from: s.from, ref: s.ref, replies: 0, thread: s.thread, account: mine[0] };
+    if (!s.thread) return r;
+    try {
+      var msgs = GmailApp.getThreadById(s.thread).getMessages();
+      msgs.forEach(function (m) {
+        var f = (m.getFrom().match(/[^\s<>]+@[^\s<>]+/) || [''])[0].toLowerCase();
+        if (mine.indexOf(f) < 0) { r.replies++; r.lastReply = m.getDate().getTime(); r.lastFrom = m.getFrom().slice(0, 120); r.snippet = m.getPlainBody().replace(/\s+/g, ' ').slice(0, 220); }
+      });
+    } catch (e) {}
+    return r;
+  });
+}
+
 function index_() { try { return JSON.parse(PROPS.getProperty('index') || '{}'); } catch (e) { return {}; } }
 
 function doGet(e) {
@@ -112,6 +168,15 @@ function doPost(e) {
       if (b.cv) save_('open', JSON.stringify(b.cv)); else drop_('open');
       return out_({ ok: true });
     }
+    if (b.action === 'senders') return out_({ ok: true, primary: me_(), aliases: GmailApp.getAliases() });
+    if (b.action === 'translate') {
+      var to = String(b.to || ''), from = String(b.from || 'en');
+      if (!/^[a-z]{2}$/.test(to)) return out_({ ok: false, error: 'bad request' });
+      var parts = (b.texts || []).map(function (t) { return t ? LanguageApp.translate(String(t), from, to) : ''; });
+      return out_({ ok: true, texts: parts });
+    }
+    if (b.action === 'send') return out_(send_(b));
+    if (b.action === 'sent') return out_({ ok: true, items: sentStatus_() });
     return out_({ ok: false, error: 'unknown action' });
   } finally {
     lock.releaseLock();
