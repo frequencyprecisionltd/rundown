@@ -1,0 +1,109 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--ink:#16192a;--muted:#5b6074;--line:#d6d9e2;--bg:#ffffff;--field:#f6f7fa;--accent:#2c5a7a;--ok:#1d7a4f;--err:#c43c3c}
+@media (prefers-color-scheme:dark){:root{--ink:#eceef6;--muted:#a2a7ba;--line:#343a4d;--bg:#191c28;--field:#11131c;--accent:#8fbad8;--ok:#5fd39b;--err:#ff7a7a}}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Helvetica Neue",Arial,system-ui,sans-serif}
+.box{max-width:560px;padding:16px;display:flex;flex-direction:column;gap:12px}
+h2{margin:0;font-size:19px} p{margin:0;color:var(--muted)}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input,textarea{font:16px/1.45 inherit;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);width:100%;box-sizing:border-box}
+textarea{min-height:140px;resize:vertical}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+button{font:600 15px inherit;padding:11px 18px;border-radius:6px;border:0;background:var(--accent);color:#fff;cursor:pointer;align-self:flex-start}
+button:disabled{opacity:.6;cursor:default}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.msg{min-height:1.3em;font-size:14px} .err{color:var(--err)}
+/* sending animation */
+.seal{display:none;flex-direction:column;gap:14px;align-items:flex-start}
+.seal.on{display:flex}
+.cipher{font:13px/1.55 ui-monospace,Menlo,Consolas,monospace;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:12px;width:100%;box-sizing:border-box;max-height:160px;overflow:hidden;white-space:pre-wrap;word-break:break-all;color:var(--muted)}
+.cipher b{color:var(--accent);font-weight:400}
+.status{display:flex;align-items:center;gap:10px;font-weight:600}
+.lock{width:22px;height:22px}
+.lock .shackle{transition:transform .5s ease;transform-origin:16px 10px}
+.lock.open .shackle{transform:translateY(-3px) rotate(-28deg)}
+.bar{height:4px;width:100%;background:var(--line);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s linear}
+.thanks{display:none;flex-direction:column;gap:8px}
+.thanks.on{display:flex}
+.thanks .tick{width:44px;height:44px;color:var(--ok)}
+.thanks .tick path{stroke-dasharray:40;stroke-dashoffset:40;animation:draw .6s ease forwards .1s}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.lock .shackle,.bar i{transition:none}.thanks .tick path{animation:none;stroke-dashoffset:0}}
+[dir=rtl] button{align-self:flex-end}
+</style></head><body><div class="box" id="box">
+<h2 id="t_title">Send a message</h2>
+<p id="t_intro">Write to me here and I will reply by email.</p>
+<form id="f" novalidate>
+  <div class="row">
+    <label><span id="t_name">Your name</span><input id="n" autocomplete="name" required maxlength="100"></label>
+    <label><span id="t_email">Your email</span><input id="e" type="email" autocomplete="email" required maxlength="120"></label>
+  </div>
+  <label style="margin-top:10px"><span id="t_msg">Message</span><textarea id="m" required maxlength="5000"></textarea></label>
+  <div class="hp" aria-hidden="true"><label>Leave empty<input id="hp" tabindex="-1" autocomplete="off"></label></div>
+  <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px"><button type="submit" id="go">Send</button><div class="msg" id="st" aria-live="polite"></div></div>
+</form>
+<div class="seal" id="seal" aria-live="polite">
+  <div class="status"><svg class="lock open" id="lock" viewBox="0 0 32 32" aria-hidden="true"><path class="shackle" d="M10 14v-4a6 6 0 0 1 12 0v4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><rect x="6" y="14" width="20" height="14" rx="3" fill="currentColor"/></svg><span id="phase">Encrypting your message</span></div>
+  <div class="cipher" id="cipher"></div>
+  <div class="bar"><i id="bar"></i></div>
+</div>
+<div class="thanks" id="thanks" role="status">
+  <svg class="tick" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="2.5" opacity=".35"/><path d="M14 25l7 7 13-15" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <h2 id="t_thanks">Thank you for your message</h2>
+  <p id="t_thanks2">It has reached me safely and I will reply as soon as I can.</p>
+</div>
+</div>
+<script>
+(function(){
+const API = "%%API%%";
+const T = {
+  en:{title:'Send a message',intro:'Write to me here and I will reply by email.',name:'Your name',email:'Your email',msg:'Message',send:'Send',enc:'Encrypting your message',sending:'Sending securely',thanks:'Thank you for your message',thanks2:'It has reached me safely and I will reply as soon as I can.',missing:'Please add your name, a valid email address and a message.',fail:'Sorry, that did not go through. Please try again in a moment.'},
+  fr:{title:'Envoyer un message',intro:'Écrivez-moi ici, je vous répondrai par e-mail.',name:'Votre nom',email:'Votre e-mail',msg:'Message',send:'Envoyer',enc:'Chiffrement de votre message',sending:'Envoi sécurisé',thanks:'Merci pour votre message',thanks2:'Il m’est bien parvenu et je vous répondrai dès que possible.',missing:'Merci d’indiquer votre nom, une adresse e-mail valide et un message.',fail:'Désolée, l’envoi n’a pas abouti. Merci de réessayer dans un instant.'},
+  ru:{title:'Написать сообщение',intro:'Напишите мне здесь, и я отвечу по электронной почте.',name:'Ваше имя',email:'Ваш e-mail',msg:'Сообщение',send:'Отправить',enc:'Шифрование сообщения',sending:'Безопасная отправка',thanks:'Спасибо за ваше сообщение',thanks2:'Оно благополучно дошло, и я отвечу как можно скорее.',missing:'Пожалуйста, укажите имя, действующий e-mail и сообщение.',fail:'Не удалось отправить. Пожалуйста, попробуйте ещё раз чуть позже.'},
+  ar:{title:'أرسل رسالة',intro:'اكتب لي هنا وسأرد عليك عبر البريد الإلكتروني.',name:'اسمك',email:'بريدك الإلكتروني',msg:'الرسالة',send:'إرسال',enc:'جارٍ تشفير رسالتك',sending:'إرسال آمن',thanks:'شكرًا على رسالتك',thanks2:'وصلتني بأمان وسأرد عليك في أقرب وقت ممكن.',missing:'يرجى كتابة اسمك وبريد إلكتروني صحيح ورسالة.',fail:'عذرًا، لم يتم الإرسال. يرجى المحاولة مرة أخرى بعد قليل.'}
+};
+const $ = id => document.getElementById(id);
+const lang = (document.documentElement.dataset.lang || '%%LANG%%' || 'en').slice(0,2);
+const L = T[lang] || T.en;
+if (lang === 'ar'){ document.documentElement.dir = 'rtl'; document.documentElement.lang = 'ar'; } else document.documentElement.lang = lang;
+[['t_title','title'],['t_intro','intro'],['t_name','name'],['t_email','email'],['t_msg','msg'],['go','send'],['t_thanks','thanks'],['t_thanks2','thanks2']].forEach(([id,k]) => $(id).textContent = L[k]);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const GLYPHS = '0123456789abcdef';
+function wait(ms){ return new Promise(r => setTimeout(r, reduce ? Math.min(ms, 150) : ms)); }
+async function animate(text, sent){
+  const c = $('cipher'), bar = $('bar'), lock = $('lock');
+  const src = text.slice(0, 420); const chars = Array.from(src);
+  c.textContent = src; $('phase').textContent = L.enc; bar.style.width = '0';
+  const steps = reduce ? 1 : 22;
+  for (let s = 1; s <= steps; s++){
+    const k = Math.floor(chars.length * s / steps);
+    c.replaceChildren();
+    const done = chars.slice(0, k).map(ch => /\s/.test(ch) ? ch : GLYPHS[Math.random()*16|0]).join('');
+    const b = document.createElement('b'); b.textContent = done; c.append(b, document.createTextNode(chars.slice(k).join('')));
+    bar.style.width = (s / steps * 60) + '%';
+    await wait(55);
+  }
+  lock.classList.remove('open'); await wait(450);
+  $('phase').textContent = L.sending; bar.style.width = '85%';
+  const ok = await sent; bar.style.width = '100%'; await wait(400);
+  return ok;
+}
+$('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('n').value.trim(), email = $('e').value.trim(), message = $('m').value.trim();
+  const st = $('st'); st.className = 'msg'; st.textContent = '';
+  if (!name || !message || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ st.className = 'msg err'; st.textContent = L.missing; return; }
+  $('go').disabled = true;
+  let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch(x){}
+  const sent = fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'contact', name, email, message, hp: $('hp').value, lang: navigator.language || '', tz})})
+    .then(r => r.json()).then(j => !!j.ok).catch(() => false);
+  $('f').hidden = true; $('seal').classList.add('on');
+  const ok = await animate(message, sent);
+  $('seal').classList.remove('on');
+  if (ok){ $('thanks').classList.add('on'); }
+  else { $('f').hidden = false; $('lock').classList.add('open'); st.className = 'msg err'; st.textContent = L.fail; $('go').disabled = false; }
+});
+})();
+</script></body></html>

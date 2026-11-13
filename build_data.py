@@ -42,6 +42,11 @@ def main():
         with open(base, encoding="utf-8") as fh:
             b0 = json.load(fh)
         data["cvbase"] = {"cv": b0.get("cv"), "label": b0.get("label", "General CV")}
+    ho = os.path.join(db, "profile", "handover.json")
+    if os.path.exists(ho):
+        with open(ho, encoding="utf-8") as fh:
+            h0 = json.load(fh)
+        data["handover"] = {"text": h0.get("text", ""), "updated": h0.get("updated", "")}
     if os.environ.get("RUNDOWN_API_URL") and os.environ.get("RUNDOWN_API_TOKEN"):
         data["api"] = {"url": os.environ["RUNDOWN_API_URL"], "token": os.environ["RUNDOWN_API_TOKEN"]}
     if not data["jobs"]:

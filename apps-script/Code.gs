@@ -19,6 +19,9 @@
  *   {action:"sent", token}                              sent applications and whether anyone has replied
  *   {action:"login", token, dev, ua, tz, lang, how}     record an opening of the private page (emails on a new device)
  *   {action:"logins", token}                            list openings of the private page
+ *   {action:"contactSettings", token, to?}              which inboxes website messages go to
+ *   {action:"messages", token}                          messages sent through the website contact form
+ *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
  *
  * The service never sees codes or readable CVs: browsers encrypt with the code before sending,
  * and the id is a one-way hash of the code.
@@ -120,6 +123,27 @@ function sentStatus_() {
   });
 }
 
+/* ---------- public contact form ---------- */
+function contactTo_() { try { var t = JSON.parse(PROPS.getProperty('contactTo') || '[]'); return t.length ? t : [me_()]; } catch (e) { return [me_()]; } }
+function contact_(b) {
+  if (b.hp) return { ok: true }; // filled by robots only
+  var name = String(b.name || '').trim().slice(0, 100), email = String(b.email || '').trim().slice(0, 120), msg = String(b.message || '').trim().slice(0, 5000);
+  if (!name || !msg || !emailOk_(email)) return { ok: false, error: 'missing' };
+  var cache = CacheService.getScriptCache(), n = Number(cache.get('contactCount') || 0);
+  if (n >= 20) return { ok: false, error: 'busy' };
+  cache.put('contactCount', String(n + 1), 3600);
+  var list; try { list = JSON.parse(load_('messages') || '[]'); } catch (x) { list = []; }
+  list.push({ t: Date.now(), name: name, email: email, message: msg, lang: String(b.lang || '').slice(0, 20), tz: String(b.tz || '').slice(0, 60) });
+  while (JSON.stringify(list).length > 60000) list.shift();
+  save_('messages', JSON.stringify(list));
+  try {
+    GmailApp.sendEmail(contactTo_().join(','), 'Message from your website: ' + name,
+      name + ' (' + email + ') sent you a message through your website:\n\n' + msg + '\n\nReply to this email to answer them directly.',
+      { replyTo: email, name: 'Your website' });
+  } catch (e) {}
+  return { ok: true };
+}
+
 /* ---------- private page openings ---------- */
 function login_(b) {
   var list; try { list = JSON.parse(load_('logins') || '[]'); } catch (x) { list = []; }
@@ -163,6 +187,7 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     var b = JSON.parse(e.postData.contents || '{}');
+    if (b.action === 'contact') return out_(contact_(b));
     var token = PROPS.getProperty('TOKEN');
     if (!token || b.token !== token) return out_({ ok: false, error: 'not allowed' });
     var idx = index_();
@@ -201,6 +226,11 @@ function doPost(e) {
     if (b.action === 'send') return out_(send_(b));
     if (b.action === 'sent') return out_({ ok: true, items: sentStatus_() });
     if (b.action === 'login') return out_(login_(b));
+    if (b.action === 'contactSettings') {
+      if (b.to) { var t2 = [].concat(b.to).map(String).filter(emailOk_).slice(0, 3); PROPS.setProperty('contactTo', JSON.stringify(t2)); }
+      return out_({ ok: true, to: contactTo_(), primary: me_() });
+    }
+    if (b.action === 'messages') { var mm; try { mm = JSON.parse(load_('messages') || '[]'); } catch (x) { mm = []; } return out_({ ok: true, items: mm }); }
     if (b.action === 'logins') { var ll; try { ll = JSON.parse(load_('logins') || '[]'); } catch (x) { ll = []; } return out_({ ok: true, items: ll }); }
     return out_({ ok: false, error: 'unknown action' });
   } finally {

@@ -121,9 +121,11 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <button type="button" role="tab" data-tab="roles" aria-selected="true">Advertised roles</button>
       <button type="button" role="tab" data-tab="outreach" aria-selected="false">Speculative emails</button>
       <button type="button" role="tab" data-tab="sent" aria-selected="false">Sent and replies</button>
+      <button type="button" role="tab" data-tab="msgs" aria-selected="false">Website messages</button>
       <button type="button" role="tab" data-tab="cvs" aria-selected="false">My CVs</button>
       <button type="button" role="tab" data-tab="stats" aria-selected="false">Stats</button>
       <button type="button" role="tab" data-tab="alerts" aria-selected="false">Job alerts</button>
+      <button type="button" role="tab" data-tab="handover" aria-selected="false">Handover</button>
     </nav>
 
     <section id="rolesView" class="controls">
@@ -157,6 +159,13 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <div id="sentList" class="day"></div>
     </section>
 
+    <section id="msgsView" hidden class="controls">
+      <p class="sub">Messages people send you through the contact box on your public website. Each one is also emailed to the inboxes you tick below, and replying to that email goes straight back to the sender.</p>
+      <div class="slot outreach" id="msgSettings"></div>
+      <div class="counts" id="msgCounts"></div>
+      <div id="msgList" class="day"></div>
+    </section>
+
     <section id="cvsView" hidden class="controls">
       <p class="sub">Give someone a code and they can download the CV you chose from your public page. Each code unlocks one CV. You can switch a code off at any time.</p>
       <div class="status" id="apiStatus"></div>
@@ -176,6 +185,12 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <p class="sub">Every time someone downloads one of your CVs from your public page: when, which code, and roughly what device and where. Locations come from the visitor's time zone and language settings, not their internet address.</p>
       <div class="counts" id="statsCounts"></div>
       <div id="statsList" class="day"></div>
+    </section>
+
+    <section id="handoverView" hidden class="controls">
+      <p class="sub">Everything another AI assistant would need to keep this page, your website and your CVs running if Claude is ever not available: what each part is, where it lives, the passwords and keys, and how the daily search works, followed by your general CV. Copy it and paste it into the new assistant as your first message. Keep it private: it contains the keys to everything.</p>
+      <div class="acts"><button type="button" class="btn solid" id="hoCopy">Copy handover</button><button type="button" class="btn" id="hoDl">Download as a file</button><span class="status" id="hoSt"></span></div>
+      <div class="mail" id="hoText" style="max-height:480px;overflow:auto;font-size:13px"></div>
     </section>
 
     <section id="alertsView" hidden class="controls">
@@ -240,7 +255,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   function showTab(t){
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats(); $('sentView').hidden = t !== 'sent'; if (t === 'sent') refreshSent();
+    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats(); $('sentView').hidden = t !== 'sent'; if (t === 'sent') refreshSent(); $('msgsView').hidden = t !== 'msgs'; if (t === 'msgs') refreshMsgs(); $('handoverView').hidden = t !== 'handover'; if (t === 'handover') renderHandover();
   }
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
   $('catSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cat = b.dataset.cat; document.querySelectorAll('#catSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
@@ -529,6 +544,56 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   }
   function place(tz){ tz = str(tz); if (!tz) return 'Unknown place'; const p = tz.split('/'); return (p[p.length-1] || tz).replace(/_/g,' ') + ' time'; }
   const LANGS = {en:'English', fr:'French', ru:'Russian', ar:'Arabic', de:'German', es:'Spanish', it:'Italian', pt:'Portuguese', nl:'Dutch'};
+  /* ---------- handover for another assistant ---------- */
+  function handoverText(){
+    const h = DATA.handover || {};
+    let t = str(h.text) || 'The handover notes have not been added yet.';
+    if (h.updated) t += '\n\n(Notes last updated ' + h.updated + '.)';
+    if (DATA.cvbase && DATA.cvbase.cv) t += '\n\n## Her general CV (JSON, the source for every tailored CV)\n' + JSON.stringify(DATA.cvbase.cv, null, 1);
+    const jobs = arr(DATA.jobs).filter(j => statusOf(j,'job') !== 'pass').slice().sort((a,b) => str(b.added).localeCompare(str(a.added))).slice(0, 40);
+    if (jobs.length) t += '\n\n## Roles currently on her list (newest first)\n' + jobs.map(j => '- ' + [j.title, j.employer, j.category, j.hours, j.pay, j.closing ? 'closes ' + j.closing : '', 'status: ' + statusOf(j,'job'), j.url].filter(Boolean).join(' | ')).join('\n');
+    return t;
+  }
+  function renderHandover(){ $('hoText').textContent = handoverText(); }
+  $('hoCopy').addEventListener('click', () => copy(handoverText(), $('hoCopy'), $('hoText')));
+  $('hoDl').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([handoverText()], {type:'text/markdown'})); a.download = 'handover.md'; document.body.append(a); a.click(); a.remove(); $('hoSt').textContent = 'Saved as handover.md'; });
+
+  /* ---------- website contact messages ---------- */
+  async function refreshMsgs(){
+    const box = $('msgList'), set = $('msgSettings');
+    if (!api()){ box.replaceChildren(el('p','status','Not available yet.')); return; }
+    box.replaceChildren(el('p','status','Loading...'));
+    let cs, ms; try { [cs, ms] = await Promise.all([call({action:'contactSettings'}), call({action:'messages'})]); } catch(e){ box.replaceChildren(el('p','status','Could not load. Check your connection.')); return; }
+    // settings
+    set.replaceChildren(el('h2',null,'Where messages are emailed'));
+    const cur = arr(cs.to), pri = str(cs.primary);
+    const priL = el('label','chk'); const priC = document.createElement('input'); priC.type = 'checkbox'; priC.id = 'msgToPrimary'; priC.checked = cur.includes(pri); priL.append(priC, el('span',null, pri + ' (the media inbox)'));
+    const other = cur.find(a => a !== pri) || '';
+    const oL = el('label','chk'); const oC = document.createElement('input'); oC.type = 'checkbox'; oC.id = 'msgToOther'; oC.checked = !!other;
+    const oI = field('input','msgOtherAddr', other, 'your personal address'); oI.type = 'email'; oI.style.maxWidth = '320px';
+    oL.append(oC, el('span',null,'Also send to '), oI);
+    const save = el('button','btn solid','Save'); save.type = 'button'; const sst = el('span','status');
+    save.addEventListener('click', async () => {
+      const to = []; if (priC.checked) to.push(pri); if (oC.checked && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(oI.value.trim())) to.push(oI.value.trim());
+      if (!to.length){ sst.className = 'status warn'; sst.textContent = 'Tick at least one inbox.'; return; }
+      save.disabled = true; try { await call({action:'contactSettings', to}); sst.className = 'status good'; sst.textContent = 'Saved.'; } catch(e){ sst.className = 'status warn'; sst.textContent = 'Could not save. Try again.'; } save.disabled = false;
+    });
+    const r = el('div','acts'); r.append(save, sst); set.append(priL, oL, r);
+    // messages
+    const items = arr(ms.items).slice().reverse();
+    $('msgCounts').textContent = items.length + (items.length === 1 ? ' message' : ' messages');
+    box.replaceChildren();
+    if (!items.length){ box.append(el('p','status','No messages yet.')); return; }
+    items.forEach(x => {
+      const c = el('article','slot comms'); const top = el('div','top'); const h = el('div');
+      h.append(el('h2',null, str(x.name)), el('div','emp', str(x.email)));
+      top.append(h, el('span','badge applied', new Date(x.t).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}))); c.append(top);
+      c.append(el('div','mail', str(x.message)));
+      const a = el('a','open','Reply by email'); a.href = 'mailto:' + encodeURIComponent(str(x.email)) + '?subject=' + encodeURIComponent('Re: your message'); const rw = el('div','acts'); rw.append(a); c.append(rw);
+      box.append(c);
+    });
+  }
+
   /* ---------- openings of this page ---------- */
   function deviceId(){ let d = ls('rundown.dev'); if (!d){ d = Array.from(crypto.getRandomValues(new Uint8Array(9)), b => b.toString(16).padStart(2,'0')).join(''); ls('rundown.dev', d); } return d || ''; }
   function recordOpening(typed){
