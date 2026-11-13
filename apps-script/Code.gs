@@ -17,6 +17,8 @@
  *   {action:"translate", token, texts, from, to}        machine translation as a starting point
  *   {action:"send", token, to, subject, body, from, files, ref, trackReplies}  send an application with CV attached
  *   {action:"sent", token}                              sent applications and whether anyone has replied
+ *   {action:"login", token, dev, ua, tz, lang, how}     record an opening of the private page (emails on a new device)
+ *   {action:"logins", token}                            list openings of the private page
  *
  * The service never sees codes or readable CVs: browsers encrypt with the code before sending,
  * and the id is a one-way hash of the code.
@@ -118,6 +120,27 @@ function sentStatus_() {
   });
 }
 
+/* ---------- private page openings ---------- */
+function login_(b) {
+  var list; try { list = JSON.parse(load_('logins') || '[]'); } catch (x) { list = []; }
+  var dev = String(b.dev || '').replace(/[^a-z0-9]/gi, '').slice(0, 24);
+  var isNew = !!dev && list.length > 0 && !list.some(function (l) { return l.dev === dev; });
+  var rec = { t: Date.now(), dev: dev, ua: String(b.ua || '').slice(0, 160), tz: String(b.tz || '').slice(0, 60), lang: String(b.lang || '').slice(0, 20), how: b.how === 'typed' ? 'typed' : 'remembered' };
+  list.push(rec);
+  while (list.length > 400) list.shift();
+  save_('logins', JSON.stringify(list));
+  if (isNew) {
+    try {
+      GmailApp.sendEmail(me_(), 'Your Rundown page was opened on a new device',
+        'Someone opened your private Rundown page on a device it has not seen before.\n\n' +
+        'When: ' + Utilities.formatDate(new Date(rec.t), 'Europe/London', 'EEEE d MMMM yyyy, HH:mm') + ' (UK time)\n' +
+        'Device: ' + rec.ua + '\nTime zone: ' + (rec.tz || 'unknown') + '\nLanguage: ' + (rec.lang || 'unknown') + '\n\n' +
+        'If this was you or Tom, there is nothing to do. If not, ask Tom to change the page password.', { name: 'Rundown' });
+    } catch (e) {}
+  }
+  return { ok: true, isNew: isNew };
+}
+
 function index_() { try { return JSON.parse(PROPS.getProperty('index') || '{}'); } catch (e) { return {}; } }
 
 function doGet(e) {
@@ -177,6 +200,8 @@ function doPost(e) {
     }
     if (b.action === 'send') return out_(send_(b));
     if (b.action === 'sent') return out_({ ok: true, items: sentStatus_() });
+    if (b.action === 'login') return out_(login_(b));
+    if (b.action === 'logins') { var ll; try { ll = JSON.parse(load_('logins') || '[]'); } catch (x) { ll = []; } return out_({ ok: true, items: ll }); }
     return out_({ ok: false, error: 'unknown action' });
   } finally {
     lock.releaseLock();

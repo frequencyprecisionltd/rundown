@@ -168,6 +168,11 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     </section>
 
     <section id="statsView" hidden class="controls">
+      <h2 style="margin-top:6px">Who opened this page</h2>
+      <p class="sub">Every time this private page is opened, with roughly what device and where from. Each one shows the date and time, so you can match them with when you yourself opened it. A private or incognito window is recorded too, and counts as a new device each time. When a new device opens it, an email goes to the media inbox. If you see an opening that was not you or Tom, ask Tom to change the password.</p>
+      <div class="counts" id="loginCounts"></div>
+      <div id="loginList" class="day"></div>
+      <h2 style="margin-top:6px">CV downloads</h2>
       <p class="sub">Every time someone downloads one of your CVs from your public page: when, which code, and roughly what device and where. Locations come from the visitor's time zone and language settings, not their internet address.</p>
       <div class="counts" id="statsCounts"></div>
       <div id="statsList" class="day"></div>
@@ -217,7 +222,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     if (!r.ok) throw new Error('fetch');
     return r.json();
   }
-  async function unlock(pw, remember){
+  async function unlock(pw, remember, typed){
     $('err').textContent = '';
     let blob;
     try { blob = await loadBlob(); } catch(e){ $('err').textContent = 'Could not load the roles. Check your connection and try again.'; return false; }
@@ -225,9 +230,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     catch(e){ $('err').textContent = 'That password did not work. Try again.'; return false; }
     if (remember) ls(KEY, pw);
     $('lock').hidden = true; $('app').hidden = false;
-    start(); return true;
+    start(); recordOpening(typed); return true;
   }
-  $('lock').addEventListener('submit', async e => { e.preventDefault(); $('unlock').disabled = true; await unlock($('pw').value, $('remember').checked); $('unlock').disabled = false; });
+  $('lock').addEventListener('submit', async e => { e.preventDefault(); $('unlock').disabled = true; await unlock($('pw').value, $('remember').checked, true); $('unlock').disabled = false; });
   $('lockBtn').addEventListener('click', () => { ls(KEY, null); location.reload(); });
   const saved = ls(KEY); if (saved) unlock(saved, true);
 
@@ -524,7 +529,38 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   }
   function place(tz){ tz = str(tz); if (!tz) return 'Unknown place'; const p = tz.split('/'); return (p[p.length-1] || tz).replace(/_/g,' ') + ' time'; }
   const LANGS = {en:'English', fr:'French', ru:'Russian', ar:'Arabic', de:'German', es:'Spanish', it:'Italian', pt:'Portuguese', nl:'Dutch'};
+  /* ---------- openings of this page ---------- */
+  function deviceId(){ let d = ls('rundown.dev'); if (!d){ d = Array.from(crypto.getRandomValues(new Uint8Array(9)), b => b.toString(16).padStart(2,'0')).join(''); ls('rundown.dev', d); } return d || ''; }
+  function recordOpening(typed){
+    if (!api()) return;
+    const last = Number(ls('rundown.lastOpen') || 0);
+    if (!typed && Date.now() - last < 20 * 60000) return; // one entry per sitting
+    ls('rundown.lastOpen', String(Date.now()));
+    let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch(e){}
+    call({action:'login', dev: deviceId(), ua: navigator.userAgent.slice(0,160), tz, lang: navigator.language || '', how: typed ? 'typed' : 'remembered'}).catch(() => {});
+  }
+  async function refreshLogins(){
+    const box = $('loginList');
+    if (!api()){ box.replaceChildren(el('p','status','Not available yet.')); return; }
+    box.replaceChildren(el('p','status','Loading...'));
+    let res; try { res = await call({action:'logins'}); } catch(e){ box.replaceChildren(el('p','status','Could not load. Check your connection.')); return; }
+    const items = arr(res.items).slice().reverse(), me = ls('rundown.dev');
+    const devs = new Set(items.map(i => i.dev).filter(Boolean));
+    $('loginCounts').textContent = items.length + (items.length === 1 ? ' opening' : ' openings') + ' · ' + devs.size + (devs.size === 1 ? ' device' : ' devices');
+    box.replaceChildren();
+    if (!items.length){ box.append(el('p','status','No openings recorded yet.')); return; }
+    const firstSeen = {}; arr(res.items).forEach(i => { if (i.dev && !(i.dev in firstSeen)) firstSeen[i.dev] = i.t; });
+    items.slice(0, 60).forEach(x => {
+      const c = el('article','slot ' + (x.dev && x.dev === me ? 'outreach' : 'comms')); const top = el('div','top'); const h = el('div');
+      h.append(el('h2',null, new Date(x.t).toLocaleString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + new Date(x.t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})), el('div','emp', device(x.ua) + (x.dev && x.dev === me ? ' · this device' : '') + (firstSeen[x.dev] === x.t ? ' · first time on this device or window' : '')));
+      top.append(h); c.append(top);
+      const meta = el('div','meta'); meta.append(el('span',null,place(x.tz)), el('span',null, x.how === 'typed' ? 'Password typed' : 'Remembered device'));
+      const lg2 = str(x.lang).slice(0,2).toLowerCase(); if (lg2) meta.append(el('span',null,(LANGS[lg2] || x.lang) + ' language setting'));
+      c.append(meta); box.append(c);
+    });
+  }
   async function refreshStats(){
+    refreshLogins();
     const box = $('statsList');
     if (!api()){ box.replaceChildren(el('p','status','Stats appear here once sharing is switched on.')); return; }
     box.replaceChildren(el('p','status','Loading...'));
