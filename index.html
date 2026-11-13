@@ -173,6 +173,13 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <div class="acts"><a class="open" id="siteEdit" target="_blank" rel="noopener">Edit my website</a><a class="btn" id="siteOpen" target="_blank" rel="noopener">Open it as visitors see it</a></div>
       <div class="slot outreach">
         <h2>How to change your website</h2>
+        <div id="siteLogin" hidden style="border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0 0 12px;font-size:14px;line-height:1.6">
+          <b>Signing in to edit</b><br>
+          Your website is made with Google Sites. Go to <span id="siteLoginWhere">sites.google.com</span> (or press Edit my website above) and sign in with your Google account:<br>
+          Username (email): <code id="siteLoginUser"></code><br>
+          Password: <code id="siteLoginPw"></code> <button class="btn" type="button" id="siteLoginShow" style="padding:2px 10px;font-size:13px">Show</button><br>
+          Once you are in, you can change the writing, photos, fonts, colours, layout and pages, as below.
+        </div>
         <ul class="checks" style="color:var(--ink);font-size:14px">
           <li><b>Change any writing:</b> in the editor, click the text and type.</li>
           <li><b>Add a photo:</b> on the right, Insert, then Images. Drag it where you want it.</li>
@@ -645,6 +652,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   }
   function renderSite(){
     $('siteEdit').href = str(DATA.siteEdit) || '#'; $('siteOpen').href = str(DATA.publicSite) || '#';
+    if (DATA.siteAccount){ $('siteLogin').hidden = false; $('siteLoginUser').textContent = str(DATA.siteAccount);
+      const pw = str(DATA.sitePassword), mask = pw ? '•'.repeat(pw.length) : '(not saved yet)'; $('siteLoginPw').textContent = mask;
+      $('siteLoginShow').onclick = () => { const hid = $('siteLoginShow').textContent === 'Show'; $('siteLoginPw').textContent = hid && pw ? pw : mask; $('siteLoginShow').textContent = hid ? 'Hide' : 'Show'; }; }
     if (!$('sitePreview').src && DATA.sitePreview) $('sitePreview').src = DATA.sitePreview;
     renderCvEditor(); renderCvHistory();
   }

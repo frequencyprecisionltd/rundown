@@ -55,6 +55,8 @@ def main():
         data["publicSite"] = l0.get("site", "")
         data["siteEdit"] = l0.get("edit", "")
         data["sitePreview"] = l0.get("preview", "")
+        data["siteAccount"] = l0.get("account", "")
+        data["sitePassword"] = l0.get("password", "")
     if os.environ.get("RUNDOWN_API_URL") and os.environ.get("RUNDOWN_API_TOKEN"):
         data["api"] = {"url": os.environ["RUNDOWN_API_URL"], "token": os.environ["RUNDOWN_API_TOKEN"]}
     if not data["jobs"]:
