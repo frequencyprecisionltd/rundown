@@ -7,6 +7,7 @@
  * Public (no token):
  *   GET ?id=<64 hex>   -> {ok:true, blob, label}  an encrypted CV, if that code exists and has not expired
  *   GET ?id=open       -> {ok:true, cv}           the open (no code) CV, if one is published
+ *   GET ?id=links      -> {ok:true, items}        profile links switched on for the public site
  * Owner (POST, JSON body as text/plain, must include token):
  *   {action:"put", token, id, blob, label, expires}   store an encrypted CV under a code hash
  *   {action:"del", token, id}                          revoke a code
@@ -20,6 +21,7 @@
  *   {action:"login", token, dev, ua, tz, lang, how}     record an opening of the private page (emails on a new device)
  *   {action:"logins", token}                            list openings of the private page
  *   {action:"contactSettings", token, to?}              which inboxes website messages go to
+ *   {action:"links", token, items?}                     profile links shown on the public site
  *   {action:"messages", token}                          messages sent through the website contact form
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
  *
@@ -169,6 +171,7 @@ function index_() { try { return JSON.parse(PROPS.getProperty('index') || '{}');
 
 function doGet(e) {
   var id = String((e && e.parameter && e.parameter.id) || '');
+  if (id === 'links') { var lk; try { lk = JSON.parse(PROPS.getProperty('links') || '[]'); } catch (x) { lk = []; } return out_({ ok: true, items: lk }); }
   if (id === 'open') {
     var cv = load_('open');
     if (cv && e.parameter.dl) log_('open', e);
@@ -229,6 +232,16 @@ function doPost(e) {
     if (b.action === 'contactSettings') {
       if (b.to) { var t2 = [].concat(b.to).map(String).filter(emailOk_).slice(0, 3); PROPS.setProperty('contactTo', JSON.stringify(t2)); }
       return out_({ ok: true, to: contactTo_(), primary: me_() });
+    }
+    if (b.action === 'links') {
+      if (b.items) {
+        var clean = [].concat(b.items).slice(0, 12).map(function (it) {
+          return { label: String(it.label || '').slice(0, 60), url: String(it.url || ''), kind: String(it.kind || 'web').replace(/[^a-z]/g, '').slice(0, 20), mode: it.mode === 'feed' ? 'feed' : 'icon', handle: String(it.handle || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 30) };
+        }).filter(function (it) { return /^https:\/\/[^\s"'<>]+$/.test(it.url); });
+        PROPS.setProperty('links', JSON.stringify(clean));
+      }
+      var cur; try { cur = JSON.parse(PROPS.getProperty('links') || '[]'); } catch (x) { cur = []; }
+      return out_({ ok: true, items: cur });
     }
     if (b.action === 'messages') { var mm; try { mm = JSON.parse(load_('messages') || '[]'); } catch (x) { mm = []; } return out_({ ok: true, items: mm }); }
     if (b.action === 'logins') { var ll; try { ll = JSON.parse(load_('logins') || '[]'); } catch (x) { ll = []; } return out_({ ok: true, items: ll }); }

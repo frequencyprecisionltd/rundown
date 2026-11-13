@@ -1,0 +1,53 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--ink:#16192a;--muted:#5b6074;--line:#d6d9e2;--bg:#ffffff;--chip:#f1f3f7;--accent:#2c5a7a}
+@media (prefers-color-scheme:dark){:root{--ink:#eceef6;--muted:#a2a7ba;--line:#343a4d;--bg:#191c28;--chip:#232738;--accent:#8fbad8}}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Helvetica Neue",Arial,system-ui,sans-serif}
+.box{padding:16px;display:flex;flex-direction:column;gap:14px}
+h2{margin:0;font-size:19px}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+a.link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:7px 14px 7px 8px;font-size:14px}
+a.link:hover{border-color:var(--accent)}
+a.link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.badge{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:700 11px/1 Arial,sans-serif;color:#fff;background:var(--accent);letter-spacing:-.02em}
+.feed{border:1px solid var(--line);border-radius:8px;overflow:hidden;max-width:560px}
+.feed .fallback{padding:14px;color:var(--muted);font-size:14px}
+.empty{display:none}
+</style></head><body><div class="box" id="box" hidden>
+<h2 id="title">Elsewhere</h2>
+<div class="row" id="row"></div>
+<div id="feeds"></div>
+</div>
+<script>
+(function(){
+const API = "%%API%%";
+const LANG = "%%LANG%%";
+const TITLES = {en:'Elsewhere', fr:'Ailleurs', ru:'В сети', ar:'على الإنترنت'};
+const BADGE = {linkedin:'in', x:'X', muckrack:'MR', imdb:'IM', youtube:'YT', instagram:'IG', web:'↗'};
+const COLOR = {linkedin:'#2d64bc', x:'#111111', muckrack:'#2a7f62', imdb:'#8a6d00', youtube:'#b3261e', instagram:'#9b3a8f', web:''};
+const $ = id => document.getElementById(id);
+if (LANG === 'ar') document.documentElement.dir = 'rtl';
+$('title').textContent = TITLES[LANG] || TITLES.en;
+function safe(u){ try { const x = new URL(u); return x.protocol === 'https:' ? x.href : null; } catch(e){ return null; } }
+fetch(API + '?id=links', {cache:'no-store'}).then(r => r.json()).then(res => {
+  const items = (res && res.items) || [];
+  if (!items.length) return;
+  $('box').hidden = false;
+  items.forEach(it => {
+    const href = safe(it.url); if (!href) return;
+    const a = document.createElement('a'); a.className = 'link'; a.href = href; a.target = '_blank'; a.rel = 'noopener me';
+    const b = document.createElement('span'); b.className = 'badge'; b.textContent = BADGE[it.kind] || BADGE.web; if (COLOR[it.kind]) b.style.background = COLOR[it.kind];
+    a.append(b, document.createTextNode(it.label || href)); $('row').append(a);
+    if (it.mode === 'feed' && it.kind === 'x' && it.handle){
+      const f = document.createElement('div'); f.className = 'feed';
+      const t = document.createElement('a'); t.className = 'twitter-timeline'; t.setAttribute('data-height', '520'); t.setAttribute('data-dnt', 'true');
+      if (matchMedia('(prefers-color-scheme: dark)').matches) t.setAttribute('data-theme', 'dark');
+      t.href = 'https://twitter.com/' + it.handle; t.textContent = 'Latest posts from @' + it.handle;
+      const fb = document.createElement('div'); fb.className = 'fallback'; fb.append(t);
+      f.append(fb); $('feeds').append(f);
+      if (!document.getElementById('xw')){ const s = document.createElement('script'); s.id = 'xw'; s.async = true; s.src = 'https://platform.twitter.com/widgets.js'; document.body.append(s); }
+    }
+  });
+}).catch(() => {});
+})();
+</script></body></html>

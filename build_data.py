@@ -47,6 +47,12 @@ def main():
         with open(ho, encoding="utf-8") as fh:
             h0 = json.load(fh)
         data["handover"] = {"text": h0.get("text", ""), "updated": h0.get("updated", "")}
+    lk = os.path.join(db, "profile", "links.json")
+    if os.path.exists(lk):
+        with open(lk, encoding="utf-8") as fh:
+            l0 = json.load(fh)
+        data["links"] = l0.get("items", [])
+        data["publicSite"] = l0.get("site", "")
     if os.environ.get("RUNDOWN_API_URL") and os.environ.get("RUNDOWN_API_TOKEN"):
         data["api"] = {"url": os.environ["RUNDOWN_API_URL"], "token": os.environ["RUNDOWN_API_TOKEN"]}
     if not data["jobs"]:
