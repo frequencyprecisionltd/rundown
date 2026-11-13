@@ -62,6 +62,7 @@ async function open_(blob, code){
   if (blob.z){ const ds = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')); buf = await new Response(ds).arrayBuffer(); }
   return JSON.parse(new TextDecoder().decode(buf));
 }
+function info(){ let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch(e){} return '&ua=' + encodeURIComponent(navigator.userAgent.slice(0,160)) + '&tz=' + encodeURIComponent(tz) + '&lang=' + encodeURIComponent(navigator.language || ''); }
 async function getJson(q){ const r = await fetch(API + '?' + q, {cache:'no-store'}); return r.json(); }
 function offer(blob, name){
   const m = $('m'); const url = URL.createObjectURL(blob);
@@ -73,7 +74,7 @@ function offer(blob, name){
 $('f').addEventListener('submit', async e => {
   e.preventDefault(); const m = $('m'); m.className = 'msg'; m.textContent = 'Checking...'; $('go').disabled = true;
   try {
-    const code = $('c').value; const res = await getJson('id=' + await codeId(code));
+    const code = $('c').value; const res = await getJson('id=' + await codeId(code) + info());
     if (!res.ok) throw new Error('nf');
     const p = await open_(res.blob, code);
     offer(await buildDocx(p.cv), str(p.cv.name) + ' CV.docx');
@@ -83,7 +84,7 @@ $('f').addEventListener('submit', async e => {
 getJson('id=open').then(res => {
   if (!res.ok || !res.cv) return;
   $('openBox').hidden = false;
-  $('openBtn').addEventListener('click', async () => offer(await buildDocx(res.cv), str(res.cv.name) + ' CV.docx'));
+  $('openBtn').addEventListener('click', async () => { getJson('id=open&dl=1' + info()).catch(() => {}); offer(await buildDocx(res.cv), str(res.cv.name) + ' CV.docx'); });
 }).catch(() => {});
 })();
 </script></body></html>

@@ -114,6 +114,7 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
       <button type="button" role="tab" data-tab="roles" aria-selected="true">Advertised roles</button>
       <button type="button" role="tab" data-tab="outreach" aria-selected="false">Speculative emails</button>
       <button type="button" role="tab" data-tab="cvs" aria-selected="false">My CVs</button>
+      <button type="button" role="tab" data-tab="stats" aria-selected="false">Stats</button>
       <button type="button" role="tab" data-tab="alerts" aria-selected="false">Job alerts</button>
     </nav>
 
@@ -150,6 +151,12 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
       <div id="codeList" class="day"></div>
       <h2 style="margin-top:6px">Your CVs</h2>
       <div id="cvList" class="day"></div>
+    </section>
+
+    <section id="statsView" hidden class="controls">
+      <p class="sub">Every time someone downloads one of your CVs from your public page: when, which code, and roughly what device and where. Locations come from the visitor's time zone and language settings, not their internet address.</p>
+      <div class="counts" id="statsCounts"></div>
+      <div id="statsList" class="day"></div>
     </section>
 
     <section id="alertsView" hidden class="controls">
@@ -214,7 +221,7 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
   function showTab(t){
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes();
+    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats();
   }
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
   $('catSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cat = b.dataset.cat; document.querySelectorAll('#catSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
@@ -428,14 +435,17 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
         const lab = el('label','status','Code works for '); const sel = document.createElement('select'); sel.id = 'exp-' + item.key.replace(/[^a-z0-9]/gi,'');
         [['30','30 days'],['90','90 days'],['0','no time limit']].forEach(([v,t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); });
         sel.value = '90'; lab.append(sel);
+        const wlab = el('label','status','Who is it for? '); const who = document.createElement('input'); who.id = 'who-' + item.key.replace(/[^a-z0-9]/gi,''); who.placeholder = 'e.g. Jane Smith, One Decision';
+        who.style.cssText = 'font:15px var(--body);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);min-width:0;width:100%;max-width:360px'; wlab.append(who);
         const go = el('button','btn solid','Make the code'); go.type = 'button'; const st = el('div','status');
-        form.append(lab, go, st); c.append(form);
+        form.append(wlab, lab, go, st); c.append(form);
         go.addEventListener('click', async () => {
           go.disabled = true; st.textContent = 'Making the code...';
           try {
             const code = newCode(), id = await codeId(code);
             const days = Number(sel.value), expires = days ? Date.now() + days * 86400000 : 0;
-            await call({action:'put', id, blob: await sealCv(code, {cv:item.cv, label:item.label}), label:item.label, expires});
+            const lbl = item.label + (who.value.trim() ? ' · for ' + who.value.trim() : '');
+            await call({action:'put', id, blob: await sealCv(code, {cv:item.cv, label:item.label}), label:lbl, expires});
             codeBook[id] = code; ls(CODES, JSON.stringify(codeBook));
             st.replaceChildren(); const big = el('div','mail'); big.style.fontSize = '22px'; big.style.letterSpacing = '.15em'; big.textContent = code;
             const cp = el('button','btn','Copy code'); cp.type = 'button'; cp.addEventListener('click', () => copy(code, cp, big));
@@ -473,6 +483,35 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
       const rv = el('button','act pass','Switch this code off'); rv.type = 'button';
       rv.addEventListener('click', async () => { rv.disabled = true; try { await call({action:'del', id: it.id}); delete codeBook[it.id]; ls(CODES, JSON.stringify(codeBook)); refreshCodes(); } catch(e){ rv.disabled = false; } });
       const row = el('div','acts'); row.append(rv); c.append(row); box.append(c);
+    });
+  }
+
+  function device(ua){
+    ua = str(ua); if (!ua) return 'Unknown device';
+    const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? (/Mobile/.test(ua) ? 'Android phone' : 'Android tablet') : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Other';
+    const br = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
+    return os + ', ' + br;
+  }
+  function place(tz){ tz = str(tz); if (!tz) return 'Unknown place'; const p = tz.split('/'); return (p[p.length-1] || tz).replace(/_/g,' ') + ' time'; }
+  const LANGS = {en:'English', fr:'French', ru:'Russian', ar:'Arabic', de:'German', es:'Spanish', it:'Italian', pt:'Portuguese', nl:'Dutch'};
+  async function refreshStats(){
+    const box = $('statsList');
+    if (!api()){ box.replaceChildren(el('p','status','Stats appear here once sharing is switched on.')); return; }
+    box.replaceChildren(el('p','status','Loading...'));
+    let lg, ls_; try { [lg, ls_] = await Promise.all([call({action:'log'}), call({action:'list'})]); } catch(e){ box.replaceChildren(el('p','status','Could not load stats. Check your connection.')); return; }
+    const labels = {}; arr(ls_.items).forEach(i => labels[i.id] = i.label);
+    const items = arr(lg.items).slice().reverse();
+    $('statsCounts').textContent = items.length + (items.length === 1 ? ' download' : ' downloads') + ' recorded';
+    box.replaceChildren();
+    if (!items.length){ box.append(el('p','status','No downloads yet.')); return; }
+    items.forEach(x => {
+      const c = el('article','slot comms'); const top = el('div','top'); const h = el('div');
+      const isOpen = x.id === 'open';
+      h.append(el('h2',null, isOpen ? 'General CV (no code)' : (codeBook[x.id] ? 'Code ' + codeBook[x.id] : 'Code download')), el('div','emp', isOpen ? 'Downloaded from your public page' : (labels[x.id] || 'Code since switched off')));
+      top.append(h, el('span','badge applied', new Date(x.t).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))); c.append(top);
+      const meta = el('div','meta'); meta.append(el('span',null,device(x.ua)), el('span',null,place(x.tz)));
+      const lg2 = str(x.lang).slice(0,2).toLowerCase(); if (lg2) meta.append(el('span',null,(LANGS[lg2] || x.lang) + ' language setting'));
+      c.append(meta); box.append(c);
     });
   }
 
