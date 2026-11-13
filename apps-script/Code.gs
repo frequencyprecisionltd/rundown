@@ -25,6 +25,7 @@
  *   {action:"cvbase", token, cv?, original?, label?}     her general CV as edited on the private page, with up to 15 earlier versions
  *   {action:"vault", token, blob?}                      password notes, encrypted in the browser with the page password
  *   {action:"messages", token}                          messages sent through the website contact form
+ *   {action:"notify", token, to?}                       where activity alerts go (her personal inbox); activityCheck() runs hourly after setupAlerts()
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
  *
  * The service never sees codes or readable CVs: browsers encrypt with the code before sending,
@@ -125,6 +126,61 @@ function sentStatus_() {
     } catch (e) {}
     return r;
   });
+}
+
+/* ---------- activity alerts to her personal inbox ---------- */
+// The address lives only in Script Properties (key "notifyTo"), set from the private page or the editor's Project Settings.
+var PAGE_URL = 'https://frequencyprecisionltd.github.io/rundown/';
+var REPO_COMMITS = 'https://api.github.com/repos/frequencyprecisionltd/rundown/commits?path=data.enc.json&per_page=20&since=';
+function notifyTo_() { return String(PROPS.getProperty('notifyTo') || '').split(',').map(function (s) { return s.trim(); }).filter(emailOk_); }
+function esc_(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+// Runs on a timer (see setupAlerts). Emails only when there is something new since the last check.
+function activityCheck() {
+  var to = notifyTo_(); if (!to.length) return 'no address set';
+  var now = Date.now(), last = Number(PROPS.getProperty('alertLast') || 0) || (now - 24 * 3600 * 1000);
+  var lines = [];
+  // 1. Board updates: the morning run pushes data.enc.json with a message like "Update: 3 new roles, 3 speculative emails".
+  try {
+    var res = UrlFetchApp.fetch(REPO_COMMITS + new Date(last).toISOString(), { muteHttpExceptions: true, headers: { 'Accept': 'application/vnd.github+json' } });
+    if (res.getResponseCode() === 200) {
+      var commits = JSON.parse(res.getContentText()), notes = [];
+      commits.forEach(function (c) {
+        var m = String((c.commit && c.commit.message) || '').split('\n')[0], d = m.match(/^Update:\s*(.+)$/i);
+        if (d) notes.push(d[1].trim());
+      });
+      if (notes.length) lines.push({ text: 'New on your board: ' + notes.reverse().join('; ') + '.' }); // a plain "Update" (nothing new) sends nothing
+    }
+  } catch (e) {}
+  // 2. Replies to applications sent from the page.
+  var seen; try { seen = JSON.parse(PROPS.getProperty('alertSeen') || '{}'); } catch (x) { seen = {}; }
+  sentStatus_().forEach(function (s) {
+    if (!s.thread || !s.replies) return;
+    if ((seen[s.thread] || 0) < s.replies) {
+      lines.push({ text: 'Reply to "' + s.subject + '" from ' + (s.lastFrom || 'the employer') + ': ' + (s.snippet || ''), strong: true });
+      seen[s.thread] = s.replies;
+    }
+  });
+  PROPS.setProperty('alertSeen', JSON.stringify(seen));
+  // 3. Messages through the website.
+  var msgs; try { msgs = JSON.parse(load_('messages') || '[]'); } catch (x) { msgs = []; }
+  var fresh = msgs.filter(function (m) { return m.t > last; });
+  if (fresh.length) lines.push({ text: fresh.length + (fresh.length === 1 ? ' new message' : ' new messages') + ' through your website, from ' + fresh.map(function (m) { return m.name; }).join(', ') + '.' });
+  PROPS.setProperty('alertLast', String(now));
+  if (!lines.length) return 'nothing new';
+  var replies = lines.some(function (l) { return l.strong; });
+  var subject = replies ? 'Someone has replied to one of your applications' : 'New activity on your job board';
+  var text = 'Hello,\n\n' + lines.map(function (l) { return '* ' + l.text; }).join('\n') + '\n\nOpen your board to see everything:\n' + PAGE_URL + '\n';
+  var html = '<p>Hello,</p><ul>' + lines.map(function (l) { return '<li>' + (l.strong ? '<b>' + esc_(l.text) + '</b>' : esc_(l.text)) + '</li>'; }).join('') +
+    '</ul><p><a href="' + PAGE_URL + '">Open your board</a> to see everything.</p><p style="color:#777;font-size:12px">' + PAGE_URL + '</p>';
+  GmailApp.sendEmail(to.join(','), subject, text, { htmlBody: html, name: 'Your job board' });
+  return 'sent: ' + lines.length;
+}
+// Run once from the editor: checks for new activity every hour.
+function setupAlerts() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'activityCheck') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('activityCheck').timeBased().everyHours(1).create();
+  if (!PROPS.getProperty('alertLast')) PROPS.setProperty('alertLast', String(Date.now()));
+  Logger.log('Alerts on. Sending to: ' + (notifyTo_().join(', ') || '(no address yet: set notifyTo in Project Settings > Script Properties)'));
 }
 
 /* ---------- public contact form ---------- */
@@ -230,6 +286,10 @@ function doPost(e) {
     }
     if (b.action === 'send') return out_(send_(b));
     if (b.action === 'sent') return out_({ ok: true, items: sentStatus_() });
+    if (b.action === 'notify') {
+      if (b.to !== undefined) { var nt = [].concat(b.to).map(String).map(function (s) { return s.trim(); }).filter(emailOk_).slice(0, 3); PROPS.setProperty('notifyTo', nt.join(',')); }
+      return out_({ ok: true, to: notifyTo_() });
+    }
     if (b.action === 'login') return out_(login_(b));
     if (b.action === 'contactSettings') {
       if (b.to) { var t2 = [].concat(b.to).map(String).filter(emailOk_).slice(0, 3); PROPS.setProperty('contactTo', JSON.stringify(t2)); }
