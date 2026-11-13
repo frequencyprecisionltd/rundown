@@ -106,6 +106,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     <p class="sub">Enter the password to open the page.</p>
     <input type="text" name="username" value="rundown" autocomplete="username" hidden>
     <input type="password" id="pw" autocomplete="current-password" placeholder="Password" required>
+    <label class="chk"><input type="checkbox" id="showpw"> Show password</label>
     <label class="chk"><input type="checkbox" id="remember" checked> Remember on this device</label>
     <button class="btn solid" type="submit" id="unlock">Open</button>
     <p class="err" id="err" aria-live="polite"></p>
@@ -263,6 +264,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     start(); recordOpening(typed); return true;
   }
   $('lock').addEventListener('submit', async e => { e.preventDefault(); $('unlock').disabled = true; await unlock($('pw').value, $('remember').checked, true); $('unlock').disabled = false; });
+  $('showpw').addEventListener('change', e => { $('pw').type = e.target.checked ? 'text' : 'password'; });
   $('lockBtn').addEventListener('click', () => { ls(KEY, null); location.reload(); });
   const saved = ls(KEY); if (saved) unlock(saved, true);
 
