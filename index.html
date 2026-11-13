@@ -189,7 +189,8 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
 
     <section id="handoverView" hidden class="controls">
       <p class="sub">Everything another AI assistant would need to keep this page, your website and your CVs running if Claude is ever not available: what each part is, where it lives, the passwords and keys, and how the daily search works, followed by your general CV. Copy it and paste it into the new assistant as your first message. Keep it private: it contains the keys to everything.</p>
-      <div class="acts"><button type="button" class="btn solid" id="hoCopy">Copy handover</button><button type="button" class="btn" id="hoDl">Download as a file</button><span class="status" id="hoSt"></span></div>
+      <p class="sub">The full backup is one zip file with the latest code for this page, your Google service and your website boxes, taken straight from GitHub, plus all your current data unencrypted and these notes. Save it somewhere safe, such as your Google Drive, so a web developer or another assistant can rebuild everything even if GitHub or Claude disappear. Make a fresh one now and then.</p>
+      <div class="acts"><button type="button" class="btn solid" id="hoCopy">Copy handover</button><button type="button" class="btn" id="hoDl">Download as a file</button><button type="button" class="btn" id="hoZip">Download full backup (.zip)</button><span class="status" id="hoSt"></span></div>
       <div class="mail" id="hoText" style="max-height:480px;overflow:auto;font-size:13px"></div>
     </section>
 
@@ -557,6 +558,40 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   function renderHandover(){ $('hoText').textContent = handoverText(); }
   $('hoCopy').addEventListener('click', () => copy(handoverText(), $('hoCopy'), $('hoText')));
   $('hoDl').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([handoverText()], {type:'text/markdown'})); a.download = 'handover.md'; document.body.append(a); a.click(); a.remove(); $('hoSt').textContent = 'Saved as handover.md'; });
+
+  const REPO_FILES = ['index.html','build_data.py','README.md','apps-script/Code.gs','public-cv/contact-box.html','public-cv/widget-template.html','public-cv/make_widget.py','data.enc.json'];
+  $('hoZip').addEventListener('click', async () => {
+    const b = $('hoZip'), st = $('hoSt'); b.disabled = true; st.textContent = 'Gathering the latest files...';
+    try {
+      const zip = new JSZip(), stamp = new Date().toISOString().slice(0,10), root = zip.folder('rundown-backup-' + stamp);
+      const got = [], missed = [];
+      for (const f of REPO_FILES){
+        try { const r = await fetch(f + '?t=' + Date.now(), {cache:'no-store'}); if (!r.ok) throw 0; root.file('code/' + f, await r.text()); got.push(f); } catch(e){ missed.push(f); }
+      }
+      root.file('HANDOVER.md', handoverText());
+      root.file('data/all-data.json', JSON.stringify(DATA, null, 1));
+      if (api()){
+        root.file('website-boxes-ready-to-paste/README.txt', 'These are the website boxes with the service address already filled in. In Google Sites use Insert > Embed > Embed code and paste the whole file.');
+        for (const [f, out] of [['public-cv/contact-box.html','contact-box-en.html']]){
+          try { const t = await (await fetch(f + '?t=' + Date.now(), {cache:'no-store'})).text(); root.file('website-boxes-ready-to-paste/' + out, t.replace('%%API%%', api().url).replace('%%LANG%%','en')); } catch(e){}
+        }
+      }
+      root.file('README-FIRST.txt', [
+        'Backup made ' + new Date().toLocaleString('en-GB') + '.',
+        '',
+        'HANDOVER.md explains every part of the system, with passwords and keys. Give it to a web developer or an AI assistant first.',
+        'code/ is the latest version of everything in the GitHub repository frequencyprecisionltd/rundown.',
+        'data/all-data.json is all current jobs, speculative emails, CVs and settings, unencrypted.',
+        '',
+        'Keep this file private.',
+        missed.length ? 'Could not include: ' + missed.join(', ') : 'All code files included.'
+      ].join('\n'));
+      const blob = await zip.generateAsync({type:'blob'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rundown-backup-' + stamp + '.zip'; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      st.textContent = 'Saved rundown-backup-' + stamp + '.zip (' + got.length + ' code files).';
+    } catch(e){ st.textContent = 'Could not make the backup. Try again.'; }
+    b.disabled = false;
+  });
 
   /* ---------- website contact messages ---------- */
   async function refreshMsgs(){
