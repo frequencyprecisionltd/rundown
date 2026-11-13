@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Pack the rundown board data into an encrypted file for the public website.
 
-Usage: python3 build_data.py <db_dir> <out_dir> <password> [--standalone]
+Usage: RUNDOWN_API_URL=... RUNDOWN_API_TOKEN=... python3 build_data.py <db_dir> <out_dir> <password> [--standalone]
+(the two variables are optional and switch on CV sharing)
 
-<db_dir> holds jobs/*.json and outreach/*.json as saved by ArtifactData list with out_dir.
+<db_dir> holds jobs/*.json, outreach/*.json and optionally profile/cvbase.json as saved by ArtifactData list with out_dir.
 Writes <out_dir>/data.enc.json (AES-GCM, key from PBKDF2-SHA256). With --standalone it also
 writes <out_dir>/standalone.html, a single file with the encrypted data built in.
 Only encrypted data is ever written, so the files are safe in a public repository.
@@ -36,6 +37,13 @@ def main():
         "jobs": load(os.path.join(db, "jobs"), KEEP_JOB),
         "outreach": load(os.path.join(db, "outreach"), KEEP_OUT),
     }
+    base = os.path.join(db, "profile", "cvbase.json")
+    if os.path.exists(base):
+        with open(base, encoding="utf-8") as fh:
+            b0 = json.load(fh)
+        data["cvbase"] = {"cv": b0.get("cv"), "label": b0.get("label", "General CV")}
+    if os.environ.get("RUNDOWN_API_URL") and os.environ.get("RUNDOWN_API_TOKEN"):
+        data["api"] = {"url": os.environ["RUNDOWN_API_URL"], "token": os.environ["RUNDOWN_API_TOKEN"]}
     if not data["jobs"]:
         sys.exit("No jobs found, refusing to publish an empty board.")
     salt, iv = os.urandom(16), os.urandom(12)
