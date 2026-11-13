@@ -22,6 +22,7 @@
  *   {action:"logins", token}                            list openings of the private page
  *   {action:"contactSettings", token, to?}              which inboxes website messages go to
  *   {action:"links", token, items?}                     profile links shown on the public site
+ *   {action:"vault", token, blob?}                      password notes, encrypted in the browser with the page password
  *   {action:"messages", token}                          messages sent through the website contact form
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
  *
@@ -242,6 +243,11 @@ function doPost(e) {
       }
       var cur; try { cur = JSON.parse(PROPS.getProperty('links') || '[]'); } catch (x) { cur = []; }
       return out_({ ok: true, items: cur });
+    }
+    if (b.action === 'vault') {
+      if (b.blob) save_('vault', JSON.stringify(b.blob));
+      var vb = load_('vault');
+      return out_({ ok: true, blob: vb ? JSON.parse(vb) : null });
     }
     if (b.action === 'messages') { var mm; try { mm = JSON.parse(load_('messages') || '[]'); } catch (x) { mm = []; } return out_({ ok: true, items: mm }); }
     if (b.action === 'logins') { var ll; try { ll = JSON.parse(load_('logins') || '[]'); } catch (x) { ll = []; } return out_({ ok: true, items: ll }); }

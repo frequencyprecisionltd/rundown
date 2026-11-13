@@ -201,6 +201,10 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <p class="sub">The full backup is one zip file with the latest code for this page, your Google service and your website boxes, taken straight from GitHub, plus all your current data unencrypted and these notes. Save it somewhere safe, such as your Google Drive, so a web developer or another assistant can rebuild everything even if GitHub or Claude disappear. Make a fresh one now and then.</p>
       <div class="acts"><button type="button" class="btn solid" id="hoCopy">Copy handover</button><button type="button" class="btn" id="hoDl">Download as a file</button><button type="button" class="btn" id="hoZip">Download full backup (.zip)</button><span class="status" id="hoSt"></span></div>
       <div class="mail" id="hoText" style="max-height:480px;overflow:auto;font-size:13px"></div>
+      <h2 style="margin-top:10px">Password notes</h2>
+      <p class="sub">Somewhere safe to keep logins for your Google account, Squarespace and anything else. They are locked with this page's password inside your browser before they are saved, so nobody without the page password can read them, not even the services that store them. If you ever change the page password, open this first and save it again afterwards.</p>
+      <textarea class="field letter" id="vaultText" style="min-height:160px" placeholder="For example:&#10;Google: natalia.rolleston.media@gmail.com, password ...&#10;Squarespace: sign in with Google"></textarea>
+      <div class="acts"><button type="button" class="btn" id="vaultShow">Show</button><button type="button" class="btn solid" id="vaultSave">Save</button><span class="status" id="vaultSt"></span></div>
     </section>
 
     <section id="alertsView" hidden class="controls">
@@ -218,6 +222,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   const $ = id => document.getElementById(id);
   const KEY = 'rundown.pw', MARKS = 'rundown.marks';
   const CATNAME = {comms:'Comms and content', broadcast:'Broadcast and arts', devon:'Devon and flexible', london:'London, for reference'};
+  let PAGEPW = '';
   let DATA = null, marks = {}, cat = 'all', statusView = 'new', tab = 'roles';
 
   function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){ return null; } }
@@ -253,7 +258,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     try { blob = await loadBlob(); } catch(e){ $('err').textContent = 'Could not load the roles. Check your connection and try again.'; return false; }
     try { DATA = await decrypt(blob, pw); }
     catch(e){ $('err').textContent = 'That password did not work. Try again.'; return false; }
-    if (remember) ls(KEY, pw);
+    PAGEPW = pw; if (remember) ls(KEY, pw);
     $('lock').hidden = true; $('app').hidden = false;
     start(); recordOpening(typed); return true;
   }
@@ -630,6 +635,29 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     catch(e){ st.className = 'status warn'; st.textContent = 'Could not save. Try again.'; }
     $('profSave').disabled = false;
   });
+
+  /* ---------- password notes (encrypted in the browser) ---------- */
+  async function vaultKey(salt, iter){ const base = await crypto.subtle.importKey('raw', new TextEncoder().encode('rundown-vault:' + PAGEPW), 'PBKDF2', false, ['deriveKey']); return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:iter, hash:'SHA-256'}, base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); }
+  async function vaultSeal(text){ const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12)), iter = 250000; const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, await vaultKey(salt, iter), new TextEncoder().encode(text))); return {v:1, iter, salt:ub64(salt), iv:ub64(iv), ct:ub64(ct)}; }
+  async function vaultOpen(blob){ const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64(blob.iv)}, await vaultKey(b64(blob.salt), blob.iter), b64(blob.ct)); return new TextDecoder().decode(pt); }
+  $('vaultText').style.webkitTextSecurity = 'disc';
+  $('vaultShow').addEventListener('click', async () => {
+    const st = $('vaultSt'), ta = $('vaultText');
+    if ($('vaultShow').textContent === 'Hide'){ ta.style.webkitTextSecurity = 'disc'; $('vaultShow').textContent = 'Show'; return; }
+    if (!api()){ st.textContent = 'Not available yet.'; return; }
+    st.className = 'status'; st.textContent = 'Opening...';
+    try { const r = await call({action:'vault'}); ta.value = r.blob ? await vaultOpen(r.blob) : ''; ta.style.webkitTextSecurity = 'none'; $('vaultShow').textContent = 'Hide'; st.textContent = r.blob ? '' : 'Nothing saved yet.'; }
+    catch(e){ st.className = 'status warn'; st.textContent = 'Could not open them. They may have been saved with a different page password.'; }
+  });
+  $('vaultSave').addEventListener('click', async () => {
+    const st = $('vaultSt'); if (!api()){ st.textContent = 'Not available yet.'; return; }
+    if ($('vaultShow').textContent !== 'Hide' && !confirmVaultOverwrite) { confirmVaultOverwrite = true; st.className = 'status warn'; st.textContent = 'Press Show first so you do not overwrite notes already saved. Press Save again to save anyway.'; return; }
+    $('vaultSave').disabled = true; st.className = 'status'; st.textContent = 'Saving...';
+    try { await call({action:'vault', blob: await vaultSeal($('vaultText').value)}); st.className = 'status good'; st.textContent = 'Saved and locked.'; confirmVaultOverwrite = false; }
+    catch(e){ st.className = 'status warn'; st.textContent = 'Could not save. Try again.'; }
+    $('vaultSave').disabled = false;
+  });
+  let confirmVaultOverwrite = false;
 
   /* ---------- website contact messages ---------- */
   async function refreshMsgs(){
