@@ -53,6 +53,8 @@ def main():
             l0 = json.load(fh)
         data["links"] = l0.get("items", [])
         data["publicSite"] = l0.get("site", "")
+        data["siteEdit"] = l0.get("edit", "")
+        data["sitePreview"] = l0.get("preview", "")
     if os.environ.get("RUNDOWN_API_URL") and os.environ.get("RUNDOWN_API_TOKEN"):
         data["api"] = {"url": os.environ["RUNDOWN_API_URL"], "token": os.environ["RUNDOWN_API_TOKEN"]}
     if not data["jobs"]:

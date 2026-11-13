@@ -22,6 +22,7 @@
  *   {action:"logins", token}                            list openings of the private page
  *   {action:"contactSettings", token, to?}              which inboxes website messages go to
  *   {action:"links", token, items?}                     profile links shown on the public site
+ *   {action:"cvbase", token, cv?, original?, label?}     her general CV as edited on the private page, with up to 15 earlier versions
  *   {action:"vault", token, blob?}                      password notes, encrypted in the browser with the page password
  *   {action:"messages", token}                          messages sent through the website contact form
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
@@ -243,6 +244,22 @@ function doPost(e) {
       }
       var cur; try { cur = JSON.parse(PROPS.getProperty('links') || '[]'); } catch (x) { cur = []; }
       return out_({ ok: true, items: cur });
+    }
+    if (b.action === 'cvbase') {
+      var hist; try { hist = JSON.parse(load_('cvhist') || '[]'); } catch (x) { hist = []; }
+      var curS = load_('cvbase');
+      if (b.cv) {
+        if (curS) hist.push({ t: Number(PROPS.getProperty('cvbase:t') || 0) || Date.now(), label: String(PROPS.getProperty('cvbase:label') || ''), cv: JSON.parse(curS) });
+        else if (b.original) hist.push({ t: Date.now(), label: 'Original', cv: b.original });
+        while (hist.length > 15) hist.shift();
+        while (JSON.stringify(hist).length > 300000 && hist.length > 1) hist.shift();
+        save_('cvhist', JSON.stringify(hist));
+        save_('cvbase', JSON.stringify(b.cv));
+        PROPS.setProperty('cvbase:t', String(Date.now()));
+        PROPS.setProperty('cvbase:label', String(b.label || '').slice(0, 80));
+        curS = JSON.stringify(b.cv);
+      }
+      return out_({ ok: true, cv: curS ? JSON.parse(curS) : null, t: Number(PROPS.getProperty('cvbase:t') || 0), history: hist });
     }
     if (b.action === 'vault') {
       if (b.blob) save_('vault', JSON.stringify(b.blob));
