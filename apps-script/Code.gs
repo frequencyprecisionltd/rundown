@@ -31,6 +31,7 @@
  *   {action:"marks", token, set?}                       Interested / Applied / Sent / Not interested marks shared across devices
  *   {action:"backups", token, op?:"now"}           daily backups in her Google Drive (code zip from GitHub + service data); dailyBackup() runs each night after setupAlerts()
  *   {action:"linkcheck", token, items:[{url,title}]}  is each job advert still there? (gone, redirected elsewhere, or says it has closed)
+ *   {action:"location", token, pageUrl?, repo?}      where the board lives (its web address and GitHub owner/name); used when the board moves
  *   {action:"notify", token, to?}                      where activity alerts go (her personal inbox); activityCheck() runs hourly after setupAlerts()
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
  *
@@ -456,6 +457,11 @@ function doPost(e) {
     if (b.action === 'forms') return out_(forms_(b));
     if (b.action === 'backups') return out_(backups_(b));
     if (b.action === 'linkcheck') return out_(linkcheck_(b));
+    if (b.action === 'location') {
+      if (b.pageUrl) { if (!/^https:\/\/[^\s"'<>]+\/$/.test(String(b.pageUrl))) return out_({ ok: false, error: 'pageUrl must start https:// and end with /' }); PROPS.setProperty('pageUrl', String(b.pageUrl).slice(0, 300)); }
+      if (b.repo) { if (!/^[\w.-]+\/[\w.-]+$/.test(String(b.repo))) return out_({ ok: false, error: 'repo must look like owner/name' }); PROPS.setProperty('repo', String(b.repo)); }
+      return out_({ ok: true, pageUrl: PROPS.getProperty('pageUrl') || PAGE_URL, repo: PROPS.getProperty('repo') || REPO });
+    }
     if (b.action === 'notify') {
       if (b.to !== undefined) { var nt = [].concat(b.to).map(String).map(function (s) { return s.trim(); }).filter(emailOk_).slice(0, 3); PROPS.setProperty('notifyTo', nt.join(',')); }
       return out_({ ok: true, to: notifyTo_() });
