@@ -53,6 +53,19 @@ h1{font:700 clamp(28px,7vw,40px)/1.05 var(--display);margin:4px 0 0;letter-spaci
 .exitbtn{position:absolute;top:0;right:0}
 @media (max-width:560px){.exitbtn{position:static;display:block;margin:0 0 10px auto}}
 .slot p,.slot .mail,.slot code,.slot .why{overflow-wrap:anywhere}
+.xcard{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0;background:var(--surface)}
+.xhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.xhead h3{margin:0;font-size:18px;flex:1;min-width:160px}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.switch input{width:44px;height:24px;appearance:none;-webkit-appearance:none;background:var(--line);border-radius:999px;position:relative;cursor:pointer;margin:0;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+.switch input:checked{background:#1baf7a}.switch input:checked::after{left:23px}
+.xitem{display:flex;gap:10px;align-items:flex-start;border-top:1px solid var(--line);padding:8px 0}
+.xitem img{width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:var(--line)}
+.xitem .xt{flex:1;min-width:0}.xitem .xt b{display:block;overflow-wrap:anywhere}.xitem .xt span{font-size:13px;color:var(--muted)}
+.xform{display:grid;gap:8px;margin-top:8px;border-top:1px dashed var(--line);padding-top:10px}
+.xthumbs{display:flex;flex-wrap:wrap;gap:6px}.xthumbs div{position:relative}.xthumbs img{width:70px;height:70px;object-fit:cover;border-radius:6px}
+.xthumbs button{position:absolute;top:-6px;right:-6px;border-radius:50%;width:22px;height:22px;padding:0;line-height:1}
 .tgh{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 6px}
 .tilesrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -270,6 +283,10 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <a id="sitePrevLink" target="_blank" rel="noopener" style="display:block;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;min-height:200px"><img id="sitePreview" alt="Picture of your public website as visitors see it" style="width:100%;display:block"></a>
       <div class="acts"><button type="button" class="btn" id="sitePrevRefresh">Refresh the picture</button><span class="status" id="sitePrevSt">A picture of the front page as visitors see it. Click it to open the live site. After you publish a change, the picture can take a few minutes to catch up.</span></div>
 
+      <h2 style="margin-top:14px">Extras for your website</h2>
+      <p class="sub">A journal or blog, an audio library and a projects showcase. Each one is off until you switch it on, and you can add to them from your phone. When one is switched on, its box shows on your website wherever you have placed it; switched off, the box shows nothing.</p>
+      <div id="xLook" class="acts" style="align-items:center"></div>
+      <div id="xWrap"></div>
       <h2 style="margin-top:14px">My CV</h2>
       <p class="sub">This is your general CV: the one people can download from your website, and the starting point for every application. Change anything and press Save. Every earlier version is kept below with its date, so you can always go back.</p>
       <div id="cvEdit" class="panel" style="border:0;padding:0"></div>
@@ -1083,7 +1100,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   $('hoPrompt').addEventListener('click', () => { const t = str((DATA.handover || {}).text), i = t.search(/^## \d+\. Prompt for a new agent/m); const body = i < 0 ? handoverText() : t.slice(t.indexOf('\n', i) + 1).trim(); copy(body, $('hoPrompt'), $('hoText')); $('hoSt').textContent = 'Prompt copied. Paste it into the new agent, then give it access to the code.'; });
   $('hoDl').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([handoverText()], {type:'text/markdown'})); a.download = 'handover.md'; document.body.append(a); a.click(); a.remove(); $('hoSt').textContent = 'Saved as handover.md'; });
 
-  const REPO_FILES = ['index.html','build_data.py','README.md','tools/rundown_data.py','tools/publish.sh','apps-script/Code.gs','public-cv/contact-box.html','public-cv/widget-template.html','public-cv/make_widget.py','data.enc.json'];
+  const REPO_FILES = ['index.html','build_data.py','README.md','tools/rundown_data.py','tools/publish.sh','apps-script/Code.gs','public-cv/contact-box.html','public-cv/extras-box.html','public-cv/links-box.html','public-cv/widget-template.html','public-cv/make_widget.py','data.enc.json'];
   $('hoZip').addEventListener('click', async () => {
     const b = $('hoZip'), st = $('hoSt'); b.disabled = true; st.textContent = 'Gathering the latest files...';
     try {
@@ -1139,6 +1156,152 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   }
   $('bkNow').addEventListener('click', () => loadBackups('now'));
 
+  /* ---------- website extras: journal, audio library, projects ---------- */
+  const XKINDS = [
+    {k:'journal', icon:'📝', name:'Journal or blog', add:'New post', hint:'Photos with a few words, or just photos. Daily, weekly or whenever you like.'},
+    {k:'audio', icon:'🎧', name:'Audio library', add:'Add audio', hint:'Upload an audio file from your phone or computer (up to 25 MB), or paste a SoundCloud, YouTube or Google Drive link.'},
+    {k:'projects', icon:'🎬', name:'Projects', add:'Add project', hint:'Each project gets a picture or player (YouTube, Vimeo, SoundCloud or Drive), a short description and links.'}];
+  const XPLACES = [
+    {v:'3', label:'Under my name on the home page (latest 3)', how:'Open your home page in the editor, click just below your intro, then Insert, Embed, Embed code, paste, Next, Insert. Drag the box to sit under your intro and make it wide.'},
+    {v:'0', label:'On its own page (everything)', how:'In the editor: Pages, the + button, New page, name it (for example Journal, Listen or Projects), Done. Then Insert, Embed, Embed code, paste, Next, Insert, and stretch the box to fill the page.'},
+    {v:'6', label:'At the bottom of the home page (latest 6)', how:'Open your home page in the editor, scroll to the bottom, then Insert, Embed, Embed code, paste, Next, Insert, and drag the box to the end of the page.'}];
+  let XD = null;
+  function xlab(text, ctl){ const d = el('div','fl'); const l = el('label','outh', text); if (!ctl.id) ctl.id = 'x' + Math.random().toString(36).slice(2); l.htmlFor = ctl.id; d.append(l, ctl); return d; }
+  const xthumb = id => 'https://drive.google.com/thumbnail?id=' + id + '&sz=w300';
+  async function xcall(body){ const r = await call(Object.assign({action:'extras'}, body)); XD = r; return r; }
+  async function loadExtras(){
+    const w = $('xWrap'); if (!api()){ w.replaceChildren(el('p','status','Needs the Google service.')); return; }
+    if (!XD){ w.replaceChildren(el('p','status','Loading...')); try { await xcall({op:'get'}); } catch(e){ w.replaceChildren(el('p','status','Could not load the extras. If this is the first time, the Google service may need a new approval (see Handover).')); return; } }
+    renderExtras();
+  }
+  function renderExtras(){
+    const look = $('xLook'); look.replaceChildren();
+    const col = document.createElement('input'); col.type = 'color'; col.value = (XD.look && XD.look.accent) || '#2c5a7a'; col.title = 'Colour of buttons and links in the boxes';
+    const font = document.createElement('select'); font.className = 'field'; ['Lato','Montserrat','Playfair Display','Merriweather','Source Sans 3','Libre Baskerville','Raleway','Open Sans'].forEach(f => opt(font, f, f)); font.value = (XD.look && XD.look.font) || 'Lato';
+    const lst = el('span','status');
+    const saveLook = async () => { lst.textContent = 'Saving...'; try { await xcall({op:'look', accent: col.value, font: font.value}); lst.textContent = 'Saved. Your website boxes use it straight away.'; } catch(e){ lst.textContent = 'Could not save.'; } };
+    col.addEventListener('change', saveLook); font.addEventListener('change', saveLook);
+    look.append(el('span','status','Look of the boxes: colour'), col, el('span','status','font'), font, lst);
+    $('xWrap').replaceChildren(...XKINDS.map(xcard));
+  }
+  function xcard(K){
+    const S = XD.settings[K.k], list = XD[K.k] || [], c = el('div','xcard');
+    const h = el('div','xhead'); h.append(el('h3', null, K.icon + ' ' + K.name));
+    const sw = el('label','switch'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!S.on; cb.setAttribute('role','switch');
+    const swl = el('span', null, S.on ? 'On: showing on your website' : 'Off: hidden from your website');
+    cb.addEventListener('change', async () => { cb.disabled = true; try { await xcall({op:'settings', kind:K.k, on: cb.checked}); renderExtras(); } catch(e){ cb.checked = !cb.checked; cb.disabled = false; swl.textContent = 'Could not save. Try again.'; } });
+    sw.append(cb, swl); h.append(sw); c.append(h);
+    c.append(el('p','status', K.hint));
+    const tIn = field('input', 'xt-' + K.k, S.title || ''); tIn.placeholder = 'Heading shown above it (leave empty for none)';
+    tIn.addEventListener('change', async () => { try { await xcall({op:'settings', kind:K.k, title: tIn.value}); } catch(e){} });
+    c.append(xlab('Heading on your website', tIn));
+    const acts = el('div','acts'); const add = el('button','btn solid', '+ ' + K.add); add.type = 'button';
+    const place = el('button','btn','Put it on my website'); place.type = 'button';
+    acts.append(add, place); c.append(acts);
+    const formBox = el('div'); const placeBox = el('div'); placeBox.hidden = true; c.append(formBox, placeBox);
+    add.addEventListener('click', () => { formBox.replaceChildren(xform(K, null, formBox)); formBox.scrollIntoView({block:'nearest'}); });
+    place.addEventListener('click', () => { placeBox.hidden = !placeBox.hidden; if (!placeBox.hidden) placeBox.replaceChildren(xplace(K)); });
+    if (!list.length) c.append(el('p','status','Nothing added yet.'));
+    list.forEach((it, i) => {
+      const r = el('div','xitem');
+      const pic = it.photos && it.photos[0] || it.photo; if (pic){ const im = el('img'); im.src = xthumb(pic); im.alt = ''; im.loading = 'lazy'; r.append(im); }
+      const t = el('div','xt'); t.append(el('b', null, it.title || str(it.text).trim().slice(0, 60) || (K.k === 'journal' ? 'Photo post' : 'Untitled')), el('span', null, fmtDay(it.t) + (it.hidden ? ' · hidden' : '') + (it.photos && it.photos.length > 1 ? ' · ' + it.photos.length + ' photos' : '') + (it.file ? ' · audio file' : it.link ? ' · link' : '') + (it.media ? ' · player' : '')));
+      r.append(t);
+      const b = el('div','acts'); b.style.flexWrap = 'wrap';
+      const mk = (label, fn) => { const x = el('button','btn',label); x.type = 'button'; x.style.padding = '4px 10px'; x.addEventListener('click', async () => { x.disabled = true; try { await fn(); renderExtras(); } catch(e){ x.disabled = false; x.textContent = 'Failed'; } }); b.append(x); };
+      const ed = el('button','btn','Edit'); ed.type = 'button'; ed.style.padding = '4px 10px'; ed.addEventListener('click', () => { formBox.replaceChildren(xform(K, it, formBox)); formBox.scrollIntoView({block:'nearest'}); }); b.append(ed);
+      mk(it.hidden ? 'Show' : 'Hide', () => xcall({op:'save', kind:K.k, item:Object.assign({}, it, {hidden: !it.hidden})}));
+      if (i > 0) mk('↑', () => xcall({op:'move', kind:K.k, id:it.id, dir:'up'}));
+      if (i < list.length - 1) mk('↓', () => xcall({op:'move', kind:K.k, id:it.id, dir:'down'}));
+      const del = el('button','btn','Delete'); del.type = 'button'; del.style.padding = '4px 10px';
+      del.addEventListener('click', async () => { if (del.dataset.sure !== '1'){ del.dataset.sure = '1'; del.textContent = 'Delete for good?'; return; } del.disabled = true; try { await xcall({op:'delete', kind:K.k, id:it.id}); renderExtras(); } catch(e){ del.textContent = 'Failed'; } });
+      b.append(del); r.append(b); c.append(r);
+    });
+    return c;
+  }
+  async function shrink(file){
+    try {
+      const bmp = await createImageBitmap(file, {imageOrientation:'from-image'}), max = 1600, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.84)); return blob || file;
+    } catch(e){ return file; }
+  }
+  async function xupload(file, isImage){
+    const blob = isImage ? await shrink(file) : file;
+    if (blob.size > 25 * 1024 * 1024) throw new Error('That file is over 25 MB. Put it in your Google Drive and paste its link instead.');
+    const r = await call({action:'extras', op:'upload', name: file.name, mime: isImage ? 'image/jpeg' : (file.type || 'audio/mpeg'), b64: await blobB64(blob)});
+    return r.id;
+  }
+  function xform(K, it, box){
+    it = it ? JSON.parse(JSON.stringify(it)) : {}; const f = el('div','xform'); const uid = K.k + (it.id || 'new');
+    f.append(el('div','outh', it.id ? 'Edit' : K.add));
+    const title = field('input','xti-' + uid, it.title || ''); title.placeholder = K.k === 'journal' ? 'Title (optional)' : 'Title';
+    const text = field('textarea','xtx-' + uid, it.text || ''); text.rows = K.k === 'journal' ? 6 : 3; text.placeholder = K.k === 'journal' ? 'Write here, or paste text from anywhere' : 'A short description';
+    f.append(xlab('Title', title), xlab(K.k === 'journal' ? 'Text' : 'Description', text));
+    const thumbs = el('div','xthumbs'), photos = K.k === 'journal' ? (it.photos || []).slice() : (it.photo ? [it.photo] : []);
+    const drawThumbs = () => { thumbs.replaceChildren(...photos.map((p, i) => { const d = el('div'); const im = el('img'); im.src = xthumb(p); im.alt = ''; const x = el('button','btn','×'); x.type = 'button'; x.title = 'Remove this photo'; x.addEventListener('click', () => { photos.splice(i, 1); drawThumbs(); }); d.append(im, x); return d; })); };
+    let fileIn = null, linkIn = null, mediaIn = null; const linkRows = [];
+    if (K.k !== 'audio'){
+      fileIn = document.createElement('input'); fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.multiple = K.k === 'journal'; fileIn.className = 'field';
+      f.append(xlab(K.k === 'journal' ? 'Photos (choose several, or take one now)' : 'Picture', fileIn), thumbs); drawThumbs();
+    }
+    if (K.k === 'audio'){
+      fileIn = document.createElement('input'); fileIn.type = 'file'; fileIn.accept = 'audio/*'; fileIn.className = 'field';
+      linkIn = field('input','xl-' + uid, it.link || ''); linkIn.placeholder = 'https://soundcloud.com/... or a Google Drive or YouTube link';
+      f.append(xlab(it.file ? 'Replace the audio file (optional)' : 'Audio file', fileIn), xlab('Or a link instead', linkIn));
+      if (it.file) f.append(el('p','status','An audio file is already attached.'));
+    }
+    if (K.k === 'projects'){
+      mediaIn = field('input','xm-' + uid, it.media || ''); mediaIn.placeholder = 'YouTube, Vimeo, SoundCloud or Google Drive link (optional)';
+      f.append(xlab('Video or audio player', mediaIn));
+      const lw = el('div'); lw.style.cssText = 'display:grid;gap:6px';
+      for (let i = 0; i < 3; i++){ const l = (it.links || [])[i] || {}; const row = el('div'); row.style.cssText = 'display:grid;grid-template-columns:1fr 2fr;gap:6px'; const a = field('input','xla' + i + uid, l.label || ''); a.placeholder = 'Button text, e.g. Listen'; const b = field('input','xlu' + i + uid, l.url || ''); b.placeholder = 'https://...'; row.append(a, b); lw.append(row); linkRows.push([a, b]); }
+      f.append(xlab('Links (up to 3)', lw));
+    }
+    const st = el('span','status'), r = el('div','acts'); const sv = el('button','btn solid', it.id ? 'Save changes' : (K.k === 'journal' ? 'Post' : 'Add')); sv.type = 'button'; const cn = el('button','btn','Cancel'); cn.type = 'button';
+    r.append(sv, cn, st); f.append(r);
+    cn.addEventListener('click', () => box.replaceChildren());
+    sv.addEventListener('click', async () => {
+      sv.disabled = true; st.className = 'status';
+      try {
+        const files = fileIn && fileIn.files ? [...fileIn.files] : [];
+        if (K.k !== 'audio'){
+          for (let i = 0; i < files.length; i++){ st.textContent = 'Uploading photo ' + (i + 1) + ' of ' + files.length + '...'; const id = await xupload(files[i], true); if (K.k === 'journal') photos.push(id); else { photos.length = 0; photos.push(id); } }
+          if (K.k === 'journal') it.photos = photos.slice(0, 12); else it.photo = photos[0] || '';
+        } else {
+          if (files[0]){ st.textContent = 'Uploading audio, this can take a minute...'; it.file = await xupload(files[0], false); }
+          it.link = linkIn.value.trim();
+          if (!it.file && !it.link) throw new Error('Choose an audio file or paste a link.');
+        }
+        if (K.k === 'projects'){ it.media = mediaIn.value.trim(); it.links = linkRows.map(([a, b]) => ({label: a.value.trim(), url: b.value.trim()})).filter(l => /^https:\/\//.test(l.url)); }
+        it.title = title.value.trim(); it.text = text.value;
+        if (K.k === 'journal' && !it.title && !it.text.trim() && !(it.photos || []).length) throw new Error('Add a photo or some text first.');
+        st.textContent = 'Saving...';
+        await xcall({op:'save', kind:K.k, item:it});
+        box.replaceChildren(); renderExtras();
+      } catch(e){ st.className = 'status warn'; st.textContent = e.message && e.message !== 'failed' ? e.message : 'Could not save. Check your connection and try again.'; sv.disabled = false; }
+    });
+    return f;
+  }
+  function xplace(K){
+    const w = el('div','xform'); const sel = document.createElement('select'); sel.className = 'field'; XPLACES.forEach(p => opt(sel, p.v, p.label));
+    const more = field('input','xmore-' + K.k, str(DATA.publicSite)); more.placeholder = 'Address of the page with everything (for the See all link)';
+    const how = el('p','status'); const code = el('textarea','field'); code.rows = 4; code.readOnly = true;
+    const cp = el('button','btn solid','Copy the code'); cp.type = 'button'; const st = el('span','status');
+    let tpl = null;
+    const draw = async () => {
+      const P = XPLACES.find(p => p.v === sel.value); how.textContent = P.how + ' Then press Publish.';
+      more.parentNode && (more.parentNode.hidden = sel.value === '0');
+      try { if (!tpl) tpl = await (await fetch('public-cv/extras-box.html?t=' + Date.now(), {cache:'no-store'})).text(); } catch(e){ code.value = 'Could not load the code. Try again.'; return; }
+      code.value = tpl.replace('%%API%%', api().url).replace('%%WHAT%%', K.k).replace('%%LIMIT%%', sel.value).replace('%%MORE%%', sel.value === '0' ? '' : more.value.trim());
+    };
+    sel.addEventListener('change', draw); more.addEventListener('change', draw);
+    cp.addEventListener('click', () => { copy(code.value, cp, code); st.textContent = 'Copied. Now paste it into your website as described above.'; });
+    w.append(xlab('Where should it go?', sel), xlab('"See all" goes to', more), how, code, (() => { const r = el('div','acts'); r.append(cp, st); return r; })(),
+      el('p','status', 'You only do this once for each place. After that, anything you add, hide or switch off here changes on your website by itself, with no need to publish again.' + (XD.settings[K.k].on ? '' : ' It is switched off at the moment, so the box will stay empty until you switch it on.')));
+    draw(); return w;
+  }
+
   /* ---------- my website and CV editor ---------- */
   let cvState = {cv:null, history:[], t:0};
   async function loadServerCv(){
@@ -1151,6 +1314,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       const pw = str(DATA.sitePassword), mask = pw ? '•'.repeat(pw.length) : '(not saved yet)'; $('siteLoginPw').textContent = mask;
       $('siteLoginShow').onclick = () => { const hid = $('siteLoginShow').textContent === 'Show'; $('siteLoginPw').textContent = hid && pw ? pw : mask; $('siteLoginShow').textContent = hid ? 'Hide' : 'Show'; }; }
     if (!$('sitePreview').src) sitePic(false);
+    loadExtras();
     renderCvEditor(); renderCvHistory();
   }
   const LINES = v => arr(v).map(str).join('\n');
