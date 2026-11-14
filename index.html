@@ -533,6 +533,8 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         w.append(el('div','status','Writing again so soon could look repetitive. Only send if this is for something clearly different.'));
         c.append(w);
       }
+      const bo = bouncedTo(addrs(o.contact));
+      if (bo) c.append(el('p','status warn','Your email to ' + bounceOf(bo) + ' bounced: the address does not work. Look for another contact on their website and send again.'));
       if (o.why) c.append(el('p','why',o.why));
       if (o.contact){ const ad = el('div','addr'); ad.append(el('span','status','To:')); const code = el('code',null,o.contact); const cb = el('button','btn','Copy address'); cb.type='button'; cb.addEventListener('click', () => copy(o.contact, cb, code)); ad.append(code, cb); c.append(ad); }
       if (o.contactNote) c.append(el('p','status',o.contactNote));
@@ -1063,6 +1065,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   function loadCorr(force){ if (force) { CORR = null; corrP = null; } if (!corrP) corrP = call({action:'correspondence'}).then(r => { CORR = { sent: arr(r.sent), inbox: arr(r.inbox), muted: arr(r.muted), account: r.account }; return CORR; }).catch(e => { corrP = null; throw e; }); return corrP; }
   $('corrSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cView = b.dataset.c; document.querySelectorAll('#corrSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderCorr(); });
   function gmailLink(thread){ return 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(CORR.account || '') + '#all/' + encodeURIComponent(thread); }
+  // A bounce ("Address not found") names the address that failed; link it to the email that went there.
+  function bounceOf(i){ if (!/^(mailer-daemon|postmaster)@/.test(i.addr)) return ''; return addrs(i.snippet + ' ' + i.subject).find(a => !/^(mailer-daemon|postmaster)@/.test(a) && !/googlemail\.com$|google\.com$/.test(a)) || ''; }
+  function bouncedTo(list){ return CORR ? CORR.inbox.find(i => { const b = bounceOf(i); return b && list.includes(b); }) : null; }
   function isMuted(m){ return CORR.muted.includes(m.addr) || CORR.muted.includes(m.addr.split('@')[1] || ''); }
   // What kind of email was this: from the page's own record, or by matching the address or subject to a job or speculative suggestion.
   function kindOf(m){
@@ -1077,9 +1082,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   // Replies: anything in the inbox after the email went, from the same address or the same organisation's domain, in any thread.
   function repliesTo(m){
     const ta = addrs(m.to + ',' + m.cc), ds = ta.map(dom).filter(Boolean);
-    return CORR.inbox.filter(i => i.t > m.t && !isMuted(i) && (ta.includes(i.addr) || ds.some(d => sameDom(dom(i.addr), d))));
+    return CORR.inbox.filter(i => i.t > m.t && !isMuted(i) && !bounceOf(i) && (ta.includes(i.addr) || ds.some(d => sameDom(dom(i.addr), d))));
   }
-  function linkedSent(i){ return CORR.sent.filter(m => m.t < i.t && (addrs(m.to + ',' + m.cc).includes(i.addr) || addrs(m.to + ',' + m.cc).map(dom).filter(Boolean).some(d => sameDom(dom(i.addr), d)))); }
+  function linkedSent(i){ const b = bounceOf(i); if (b) return CORR.sent.filter(m => m.t <= i.t && addrs(m.to + ',' + m.cc).includes(b)); return CORR.sent.filter(m => m.t < i.t && (addrs(m.to + ',' + m.cc).includes(i.addr) || addrs(m.to + ',' + m.cc).map(dom).filter(Boolean).some(d => sameDom(dom(i.addr), d)))); }
   async function refreshSent(){
     const box = $('sentList');
     if (!api()){ box.replaceChildren(el('p','status','Sending is not switched on yet.')); return; }
@@ -1092,7 +1097,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const c = el('article','slot ' + (linked.length ? 'outreach' : 'london') + (muted ? ' pass' : ''));
     const top = el('div','top'); const h = el('div');
     h.append(el('div','cat', fmtDay(i.t) + ' · ' + daysAgo(i.t) + (i.unread ? ' · unread' : '')), el('h2',null, (linked.length && !i.auto ? '★ ' : '') + i.subject), el('div','emp','From ' + i.from));
-    top.append(h, el('span','badge ' + (linked.length && !i.auto ? 'new' : ''), i.auto ? 'Automatic reply' : linked.length ? 'Reply' : muted ? 'Not interested' : 'Not linked to anything you sent'));
+    const bnc = bounceOf(i);
+    top.append(h, el('span','badge ' + (linked.length && !i.auto ? 'new' : ''), bnc ? 'Not delivered' : i.auto ? (linked.length ? 'Automatic reply' : 'Automatic') : linked.length ? 'Reply' : muted ? 'Not interested' : 'Not linked to anything you sent'));
+    if (bnc) c.append(el('p','status warn','The email to ' + bnc + ' did not arrive: that address does not work. Look for another contact on their website.'));
     c.append(top);
     if (linked.length) c.append(el('p','status','About what you sent ' + fmtDay(linked[0].t) + ': ' + linked[0].subject));
     c.append(el('div','mail', str(i.snippet) + (str(i.snippet).length >= 260 ? '...' : '')));
@@ -1132,8 +1139,10 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         const c = el('article','slot ' + (kind === 'Speculative' ? 'outreach' : kind === 'Advertised job' ? 'comms' : 'london'));
         const top = el('div','top'); const h = el('div');
         h.append(el('div','cat', kind + ' · sent ' + fmtDay(m.t) + ' · ' + daysAgo(m.t)), el('h2',null, (real.length ? '★ ' : '') + (label || m.subject)), el('div','emp','To ' + m.to));
-        top.append(h, el('span','badge ' + (real.length ? 'new' : ''), real.length ? 'Replied ' + daysAgo(real.sort((p,q) => q.t - p.t)[0].t) : rs.length ? 'Automatic reply only' : 'No reply yet'));
+        const bn = bouncedTo(addrs(m.to + ',' + m.cc));
+        top.append(h, el('span','badge ' + (real.length ? 'new' : ''), bn ? 'Not delivered' : real.length ? 'Replied ' + daysAgo(real.sort((p,q) => q.t - p.t)[0].t) : rs.length ? 'Automatic reply only' : 'No reply yet'));
         c.append(top);
+        if (bn) c.append(el('p','status warn','This email bounced: the address ' + bounceOf(bn) + ' does not work. Look for another contact on their website.'));
         const meta = el('div','meta'); meta.append(el('span',null,m.subject)); c.append(meta);
         if (latest){ const mm = el('div','mail'); mm.append(el('div','subj', (latest.auto ? 'Automatic reply from ' : 'Reply from ') + latest.from + ', ' + fmtDay(latest.t) + ' (' + daysAgo(latest.t) + ')'), document.createTextNode(str(latest.snippet))); c.append(mm); }
         const r = el('div','acts'); const a = el('a','open','Open in Gmail'); a.href = gmailLink(latest ? latest.thread : m.thread); a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a); c.append(r);

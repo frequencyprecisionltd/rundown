@@ -216,6 +216,11 @@ function activityCheck() {
     c.inbox.filter(function (m) { return m.t > last; }).forEach(function (m) {
       var dom = m.addr.split('@')[1] || '';
       if (muted.indexOf(m.addr) >= 0 || muted.indexOf(dom) >= 0) return;
+      if (/^(mailer-daemon|postmaster)@/.test(m.addr)) {
+        var failed = ((m.snippet + ' ' + m.subject).match(/[^\s<>"',;()]+@[^\s<>"',;()]+/g) || []).map(function (x) { return x.toLowerCase(); }).filter(function (x) { return !/^(mailer-daemon|postmaster)@|googlemail\.com$|google\.com$/.test(x); })[0];
+        if (failed) lines.push({ text: 'Not delivered: your email to ' + failed + ' bounced because the address does not work. Look for another contact on their website.' });
+        return;
+      }
       var about = wrote[m.addr] || wroteDom[dom];
       if (about) lines.push({ text: (m.auto ? 'Automatic reply' : 'Reply') + ' from ' + m.from + ' (you wrote: "' + about + '"): ' + m.snippet, strong: !m.auto });
       else if (!m.auto) others++;
