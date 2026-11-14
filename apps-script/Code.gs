@@ -27,6 +27,7 @@
  *   {action:"messages", token}                          messages sent through the website contact form
  *   {action:"correspondence", token}                    sent folder and inbox (last 400 days, flags auto replies) and the not interested list
  *   {action:"mail", token, op:"read"|"spam"|"mute"|"unmute", thread?, who?}  read a thread's full text, move a thread to spam, or mute/unmute a sender or domain
+ *   {action:"forms", token, op?:"add"|"status"|"remove", key?, item?, status?, note?}  application forms queued for Claude to fill in
  *   {action:"marks", token, set?}                       Interested / Applied / Sent / Not interested marks shared across devices
  *   {action:"notify", token, to?}                      where activity alerts go (her personal inbox); activityCheck() runs hourly after setupAlerts()
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
@@ -182,6 +183,21 @@ function mail_(b) {
   }
   return { ok: false };
 }
+/* ---------- forms the owner wants Claude to fill in (application forms with no email address) ---------- */
+function forms_(b) {
+  var list; try { list = JSON.parse(load_('forms') || '[]'); } catch (e) { list = []; }
+  var key = String(b.key || '').slice(0, 120);
+  if (b.op === 'add' && b.item && key) {
+    var it = b.item, url = String(it.url || '');
+    if (!/^https:\/\/[^\s"'<>]+$/.test(url)) return { ok: false, error: 'Please paste the full web address of the form, starting https://' };
+    list = list.filter(function (x) { return x.key !== key; });
+    list.push({ key: key, kind: String(it.kind || '').slice(0, 10), id: String(it.id || '').slice(0, 120), label: String(it.label || '').slice(0, 200), url: url.slice(0, 1000), note: String(it.note || '').slice(0, 1000), status: 'waiting', t: Date.now() });
+  }
+  if (b.op === 'status' && key) list.forEach(function (x) { if (x.key === key) { x.status = String(b.status || 'waiting').slice(0, 20); x.claudeNote = String(b.note || '').slice(0, 1000); x.t2 = Date.now(); } });
+  if (b.op === 'remove' && key) list = list.filter(function (x) { return x.key !== key; });
+  if (b.op) save_('forms', JSON.stringify(list.slice(-100)));
+  return { ok: true, items: list };
+}
 /* ---------- marks (Interested, Applied, Sent, Not interested), shared across devices ---------- */
 function marks_(b) {
   var m; try { m = JSON.parse(load_('marks') || '{}'); } catch (e) { m = {}; }
@@ -293,7 +309,7 @@ function login_(b) {
         'Someone opened your private Rundown page on a device it has not seen before.\n\n' +
         'When: ' + Utilities.formatDate(new Date(rec.t), 'Europe/London', 'EEEE d MMMM yyyy, HH:mm') + ' (UK time)\n' +
         'Device: ' + rec.ua + '\nTime zone: ' + (rec.tz || 'unknown') + '\nLanguage: ' + (rec.lang || 'unknown') + '\n\n' +
-        'If this was you or Tom, there is nothing to do. If not, ask Tom to change the page password.', { name: 'Rundown' });
+        'If this was you or someone you trust, there is nothing to do. If not, change the page password (see the Handover tab).', { name: 'Rundown' });
     } catch (e) {}
   }
   return { ok: true, isNew: isNew };
@@ -363,6 +379,7 @@ function doPost(e) {
     if (b.action === 'correspondence') return out_(correspondence_());
     if (b.action === 'mail') return out_(mail_(b));
     if (b.action === 'marks') return out_(marks_(b));
+    if (b.action === 'forms') return out_(forms_(b));
     if (b.action === 'notify') {
       if (b.to !== undefined) { var nt = [].concat(b.to).map(String).map(function (s) { return s.trim(); }).filter(emailOk_).slice(0, 3); PROPS.setProperty('notifyTo', nt.join(',')); }
       return out_({ ok: true, to: notifyTo_() });

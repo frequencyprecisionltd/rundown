@@ -30,9 +30,23 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
 .light{width:9px;height:9px;border-radius:50%;background:var(--onair)}
 h1{font:700 clamp(28px,7vw,40px)/1.05 var(--display);margin:4px 0 0;letter-spacing:-.01em;text-wrap:balance}
 .sub{color:var(--muted);margin:0;max-width:62ch}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
-.tabs button{font:600 14px var(--body);background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:10px 12px 9px;cursor:pointer;white-space:nowrap}
-.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--onair)}
+/* Menu: grouped, wrapping buttons with icons, so every section is visible without scrolling */
+.menu{display:grid;grid-template-columns:1fr;gap:10px}
+.menu .grp{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 10px 12px}
+.menu .gl{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:2px 4px 8px}
+.menu .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.menu button{display:flex;align-items:center;gap:8px;min-width:0;min-height:52px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:600 14px/1.2 var(--body);text-align:left;cursor:pointer}
+.menu button:hover{border-color:var(--muted)}
+.menu button:focus-visible{outline:2px solid var(--onair);outline-offset:2px}
+.menu button[aria-selected="true"]{border-color:var(--onair);background:var(--surface);box-shadow:inset 4px 0 0 var(--onair)}
+.menu .ic{font-size:22px;line-height:1;flex:none;width:26px;text-align:center}
+.menu .lbl{flex:1;min-width:0;hyphens:auto;-webkit-hyphens:auto}
+.menu .ct{flex:none;white-space:nowrap;font:600 11px var(--mono);background:var(--onair);color:#fff;border-radius:999px;padding:2px 7px}
+.menu .ct:empty{display:none}
+.here{font:700 22px/1.2 var(--display);margin:4px 0 0;display:flex;align-items:center;gap:10px}
+.menu .grp{padding:8px 8px 10px}
+@media (max-width:560px){.menu .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:420px){.menu{gap:10px}.menu button{min-height:48px;font-size:13.5px}.menu .ic{font-size:20px;width:22px}}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
 .seg button{font:500 13px var(--body);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 12px;border-radius:999px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -118,18 +132,28 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <h1>Rundown</h1>
       <p class="sub">New roles each morning, each with an application email and a CV tailored to the job, plus speculative emails to send. Your Saved, Applied and Not for me marks are kept for you on every device.</p>
     </header>
-    <nav class="tabs" role="tablist" id="tabs">
-      <button type="button" role="tab" data-tab="roles" aria-selected="true">Advertised roles</button>
-      <button type="button" role="tab" data-tab="outreach" aria-selected="false">Speculative emails</button>
-      <button type="button" role="tab" data-tab="sent" aria-selected="false">Correspondence</button>
-      <button type="button" role="tab" data-tab="msgs" aria-selected="false">Website messages</button>
-      <button type="button" role="tab" data-tab="site" aria-selected="false">My website</button>
-      <button type="button" role="tab" data-tab="profiles" aria-selected="false">Public profiles</button>
-      <button type="button" role="tab" data-tab="cvs" aria-selected="false">My CVs</button>
-      <button type="button" role="tab" data-tab="stats" aria-selected="false">Stats</button>
-      <button type="button" role="tab" data-tab="alerts" aria-selected="false">Job alerts</button>
-      <button type="button" role="tab" data-tab="handover" aria-selected="false">Handover</button>
+    <nav class="menu" role="tablist" id="tabs" aria-label="Sections">
+      <div class="grp"><div class="gl">Jobs</div><div class="tiles">
+        <button type="button" role="tab" data-tab="roles" aria-selected="true"><span class="ic" aria-hidden="true">💼</span><span class="lbl">Advertised roles</span><span class="ct" id="ct-roles"></span></button>
+        <button type="button" role="tab" data-tab="outreach" aria-selected="false"><span class="ic" aria-hidden="true">✉️</span><span class="lbl">Speculative emails</span><span class="ct" id="ct-outreach"></span></button>
+        <button type="button" role="tab" data-tab="alerts" aria-selected="false"><span class="ic" aria-hidden="true">🔔</span><span class="lbl">Job alerts</span><span class="ct" id="ct-alerts"></span></button>
+        <button type="button" role="tab" data-tab="forms" aria-selected="false"><span class="ic" aria-hidden="true">📝</span><span class="lbl">Forms to fill</span><span class="ct" id="ct-forms"></span></button>
+      </div></div>
+      <div class="grp"><div class="gl">Emails and messages</div><div class="tiles">
+        <button type="button" role="tab" data-tab="sent" aria-selected="false"><span class="ic" aria-hidden="true">📬</span><span class="lbl">Correspondence</span><span class="ct" id="ct-sent"></span></button>
+        <button type="button" role="tab" data-tab="msgs" aria-selected="false"><span class="ic" aria-hidden="true">💬</span><span class="lbl">Website messages</span><span class="ct" id="ct-msgs"></span></button>
+      </div></div>
+      <div class="grp"><div class="gl">My CV and website</div><div class="tiles">
+        <button type="button" role="tab" data-tab="cvs" aria-selected="false"><span class="ic" aria-hidden="true">📄</span><span class="lbl">My CVs</span><span class="ct" id="ct-cvs"></span></button>
+        <button type="button" role="tab" data-tab="site" aria-selected="false"><span class="ic" aria-hidden="true">🌐</span><span class="lbl">My website</span><span class="ct" id="ct-site"></span></button>
+        <button type="button" role="tab" data-tab="profiles" aria-selected="false"><span class="ic" aria-hidden="true">🔗</span><span class="lbl">Public profiles</span><span class="ct" id="ct-profiles"></span></button>
+      </div></div>
+      <div class="grp"><div class="gl">Behind the scenes</div><div class="tiles">
+        <button type="button" role="tab" data-tab="stats" aria-selected="false"><span class="ic" aria-hidden="true">📊</span><span class="lbl">Stats</span><span class="ct" id="ct-stats"></span></button>
+        <button type="button" role="tab" data-tab="handover" aria-selected="false"><span class="ic" aria-hidden="true">🗂️</span><span class="lbl">Handover</span><span class="ct" id="ct-handover"></span></button>
+      </div></div>
     </nav>
+    <h2 class="here" id="here">💼  Advertised roles</h2>
 
     <section id="rolesView" class="controls">
       <div class="seg" id="catSeg">
@@ -170,6 +194,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         <button type="button" data-c="replies" aria-pressed="false">Replies</button>
         <button type="button" data-c="other" aria-pressed="false">Other emails</button>
         <button type="button" data-c="inbox" aria-pressed="false">Whole inbox</button>
+        <button type="button" data-c="jobs" aria-pressed="false">Job alerts</button>
         <button type="button" data-c="muted" aria-pressed="false">Not interested</button>
       </div>
       <div class="counts" id="sentCounts"></div>
@@ -237,7 +262,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
 
     <section id="statsView" hidden class="controls">
       <h2 style="margin-top:6px">Who opened this page</h2>
-      <p class="sub">Every time this private page is opened, with roughly what device and where from. Each one shows the date and time, so you can match them with when you yourself opened it. A private or incognito window is recorded too, and counts as a new device each time. When a new device opens it, an email goes to the media inbox. If you see an opening that was not you or Tom, ask Tom to change the password.</p>
+      <p class="sub">Every time this private page is opened, with roughly what device and where from. Each one shows the date and time, so you can match them with when you yourself opened it. A private or incognito window is recorded too, and counts as a new device each time. When a new device opens it, an email goes to the media inbox. If you see an opening that was not you or someone you trust, change the page password (see Handover).</p>
       <div class="counts" id="loginCounts"></div>
       <div id="loginList" class="day"></div>
       <h2 style="margin-top:6px">CV downloads</h2>
@@ -257,7 +282,23 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <div class="acts"><button type="button" class="btn" id="vaultShow">Show</button><button type="button" class="btn solid" id="vaultSave">Save</button><span class="status" id="vaultSt"></span></div>
     </section>
 
+    <section id="formsView" hidden class="controls">
+      <p class="sub">Jobs that ask you to apply through a form on their website instead of by email. Press "Claude, fill in the form" on a role, paste in the form's address, and it is saved here. Then ask Claude (in a browser Claude can use) to "fill the saved forms": Claude opens each form, fills it in from your tailored CV and covering email, and puts up a red banner whenever a person needs to sign in, tick an agreement or press Submit. Nothing is submitted until a person presses the button.</p>
+      <div class="counts" id="formCounts"></div>
+      <div id="formList" class="day"></div>
+    </section>
+
     <section id="alertsView" hidden class="controls">
+      <div class="slot outreach">
+        <h2>Let the job sites email you</h2>
+        <p class="why">The daily search cannot sign in to LinkedIn, Guardian Jobs or other sites, and you should never give anyone your passwords. Instead, set up free email alerts on the sites below yourself. Send them to your application inbox (the Gmail account this page sends from). They then appear in Correspondence, under Job alerts, where you can read them in full and flick through.</p>
+        <ol class="checks" style="color:var(--ink);font-size:14px">
+          <li><b>LinkedIn:</b> search Jobs for, say, "producer" with the Remote and Part time filters, then switch on "Set alert". Make sure your LinkedIn email is your application inbox, or add it under Settings, Sign in and security, Email addresses.</li>
+          <li><b>Guardian Jobs:</b> make a free account with your application inbox, search, then "Create job alert".</li>
+          <li><b>CharityJob, Timewise, Arts Jobs, Culture Jobs, Escape the City, Indeed:</b> the same: search with the remote or part time filter, then save the search as an email alert.</li>
+          <li><b>BBC Careers and France Médias Monde:</b> sign up for their job alerts if you would like to hear about BBC or RFI and France 24 roles.</li>
+        </ol>
+      </div>
       <p class="sub">Set a saved search or email alert on each of these. Suggested searches: "producer remote part time", "head of communications remote", "editorial consultant", "chargé de communication télétravail".</p>
       <div class="alerts" id="alerts"></div>
     </section>
@@ -321,9 +362,10 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   function showTab(t){
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats(); $('sentView').hidden = t !== 'sent'; if (t === 'sent') refreshSent(); $('msgsView').hidden = t !== 'msgs'; if (t === 'msgs') refreshMsgs(); $('handoverView').hidden = t !== 'handover'; if (t === 'handover') renderHandover(); $('profilesView').hidden = t !== 'profiles'; if (t === 'profiles') refreshProfiles(); $('siteView').hidden = t !== 'site'; if (t === 'site') renderSite();
+    const tb = document.querySelector('#tabs button[data-tab="' + t + '"]'); if (tb) $('here').textContent = tb.querySelector('.ic').textContent + '  ' + tb.querySelector('.lbl').textContent;
+    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('formsView').hidden = t !== 'forms'; if (t === 'forms') renderForms(); $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats(); $('sentView').hidden = t !== 'sent'; if (t === 'sent') refreshSent(); $('msgsView').hidden = t !== 'msgs'; if (t === 'msgs') refreshMsgs(); $('handoverView').hidden = t !== 'handover'; if (t === 'handover') renderHandover(); $('profilesView').hidden = t !== 'profiles'; if (t === 'profiles') refreshProfiles(); $('siteView').hidden = t !== 'site'; if (t === 'site') renderSite();
   }
-  $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; showTab(b.dataset.tab); $('here').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'}); });
   $('catSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cat = b.dataset.cat; document.querySelectorAll('#catSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
   $('statusSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; statusView = b.dataset.status; document.querySelectorAll('#statusSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
 
@@ -347,7 +389,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
 
   function start(){
     if (DATA.generated) $('updated').textContent = 'Updated ' + new Date(DATA.generated).toLocaleString('en-GB',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
-    renderRoles(); renderOutreach(); renderAlerts(); renderCvs(); loadServerCv(); loadServerMarks();
+    renderRoles(); renderOutreach(); renderAlerts(); renderCvs(); loadServerCv(); loadServerMarks(); loadForms(); if (api()) loadCorr().then(() => { if (tab !== 'sent') renderCorr(); }).catch(() => {});
   }
 
   /* ---------- roles ---------- */
@@ -355,6 +397,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const jobs = arr(DATA.jobs);
     const fresh = jobs.filter(j => j.category !== 'london' && statusOf(j,'job') === 'new').length;
     const applied = jobs.filter(j => statusOf(j,'job') === 'applied').length;
+    $('ct-roles').textContent = fresh || '';
     $('counts').textContent = fresh + ' to look at · ' + applied + ' applied · ' + jobs.length + ' found in total';
     const shown = jobs.filter(j => {
       if (cat === 'all' && j.category === 'london') return false;
@@ -400,6 +443,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         b.setAttribute('aria-expanded', String(!panel.hidden));
       });
     }
+    if (api() && j.category !== 'london' && !j.applyEmail) left.append(formButton('job', j, str(j.employer) + ', ' + str(j.title), safeUrl(j.url) || '', c));
     if (api()){
       const sb = el('button','btn solid','Apply by email'); sb.type = 'button'; left.append(sb); let comp = null;
       sb.addEventListener('click', () => {
@@ -477,6 +521,61 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     return zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
   }
 
+  /* ---------- forms for Claude to fill ---------- */
+  let FORMS = [];
+  async function loadForms(){ if (!api()) return; try { const r = await call({action:'forms'}); FORMS = arr(r.items); formCount(); } catch(e){} }
+  function formCount(){ const n = FORMS.filter(f => f.status !== 'sent').length; $('ct-forms').textContent = n || ''; }
+  function formFor(kind, id){ return FORMS.find(f => f.key === kind + ':' + id); }
+  const FORM_STATUS = {waiting:'Waiting for Claude', filled:'Filled in: check and press Submit', sent:'Submitted', problem:'Claude needs help'};
+  // Button on a role or speculative card: save the form's address so Claude can fill it in later.
+  function formButton(kind, item, label, defUrl, card){
+    const f = formFor(kind, item.id);
+    const b = el('button','btn', f ? '📝 Form saved for Claude' : '📝 Claude, fill in the form'); b.type = 'button';
+    let panel = null;
+    b.addEventListener('click', () => {
+      if (panel){ panel.hidden = !panel.hidden; return; }
+      panel = el('div','mail'); panel.style.marginTop = '8px';
+      panel.append(el('div','subj','Where is the application form?'), el('p','status','Open the advert, click through to the application form, then copy its web address from the address bar and paste it here.'));
+      const u = document.createElement('input'); u.className = 'field'; u.type = 'text'; u.inputMode = 'url'; u.placeholder = 'https://...'; u.value = (f && f.url) || defUrl || ''; u.setAttribute('autocapitalize','off'); u.spellcheck = false; u.style.width = '100%';
+      const pb = el('button','btn','Paste'); pb.type = 'button'; pb.addEventListener('click', async () => { try { const t = await navigator.clipboard.readText(); if (t) u.value = t.trim(); } catch(e){ u.focus(); } });
+      const n = document.createElement('textarea'); n.className = 'field'; n.rows = 2; n.placeholder = 'Anything Claude should know (optional): e.g. use the French CV, mention I can start in March'; n.value = (f && f.note) || ''; n.style.width = '100%';
+      const sv = el('button','btn solid','Save for Claude'); sv.type = 'button'; const st = el('span','status');
+      sv.addEventListener('click', async () => {
+        const url = (u.value.match(/https:\/\/[^\s"'<>]+/) || [''])[0];
+        if (!url){ st.className = 'status warn'; st.textContent = 'Paste the full address, starting https://'; return; }
+        sv.disabled = true; st.className = 'status'; st.textContent = 'Saving...';
+        try { const r = await call({action:'forms', op:'add', key: kind + ':' + item.id, item:{kind, id:item.id, label, url, note:n.value}}); if (r.ok === false) throw new Error(r.error); FORMS = arr(r.items); formCount(); st.className = 'status good'; st.textContent = 'Saved. It is on your Forms to fill list.'; b.textContent = '📝 Form saved for Claude'; }
+        catch(e){ st.className = 'status warn'; st.textContent = e.message || 'Could not save. Try again.'; }
+        sv.disabled = false;
+      });
+      const ur = el('div'); ur.style.cssText = 'display:flex;gap:6px;margin:6px 0'; u.style.flex = '1'; ur.append(u, pb);
+      const r2 = el('div','acts'); r2.append(sv, st);
+      panel.append(ur, n, r2); card.append(panel);
+    });
+    return b;
+  }
+  async function renderForms(){
+    const box = $('formList');
+    if (!api()){ box.replaceChildren(el('p','status','Not available yet.')); return; }
+    box.replaceChildren(el('p','status','Loading...')); await loadForms(); box.replaceChildren();
+    const live = FORMS.filter(f => f.status !== 'sent');
+    $('formCounts').textContent = live.length + ' waiting · ' + (FORMS.length - live.length) + ' submitted';
+    if (!FORMS.length){ box.append(el('p','status','No forms saved yet. On a role that has no email address, press "Claude, fill in the form".')); return; }
+    FORMS.slice().sort((a,b) => (a.status === 'sent') - (b.status === 'sent') || b.t - a.t).forEach(f => {
+      const c = el('article','slot ' + (f.kind === 'out' ? 'outreach' : 'comms') + (f.status === 'sent' ? ' pass' : ''));
+      const top = el('div','top'); const h = el('div');
+      h.append(el('div','cat', (f.kind === 'out' ? 'Speculative' : 'Advertised job') + ' · saved ' + fmtDay(f.t)), el('h2',null,f.label));
+      top.append(h, el('span','badge ' + (f.status === 'filled' || f.status === 'problem' ? 'new' : f.status === 'sent' ? 'applied' : ''), FORM_STATUS[f.status] || f.status));
+      c.append(top);
+      if (f.note) c.append(el('p','why','Your note: ' + f.note));
+      if (f.claudeNote) c.append(el('p','status','Claude: ' + f.claudeNote));
+      const r = el('div','acts'); const a = el('a','open','Open the form'); a.href = safeUrl(f.url) || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a);
+      if (f.status !== 'sent'){ const done = el('button','btn','I have submitted it'); done.type = 'button'; done.addEventListener('click', async () => { const res = await call({action:'forms', op:'status', key:f.key, status:'sent'}); FORMS = arr(res.items); formCount(); renderForms(); }); r.append(done); }
+      const rm = el('button','btn','Remove'); rm.type = 'button'; rm.addEventListener('click', async () => { const res = await call({action:'forms', op:'remove', key:f.key}); FORMS = arr(res.items); formCount(); renderForms(); }); r.append(rm);
+      c.append(r); box.append(c);
+    });
+  }
+
   /* ---------- outreach ---------- */
   $('oSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; oView = b.dataset.o; document.querySelectorAll('#oSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderOutreach(); });
   const GENERIC = ['gmail.com','googlemail.com','hotmail.com','hotmail.co.uk','outlook.com','live.com','live.co.uk','yahoo.com','yahoo.co.uk','yahoo.fr','icloud.com','me.com','aol.com','btinternet.com','proton.me','protonmail.com','gmx.com','gmx.de','orange.fr','free.fr','wanadoo.fr','mail.ru','yandex.ru','yandex.com','web.de','sky.com','virginmedia.com'];
@@ -511,6 +610,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   function renderOutreach(){
     const items = arr(DATA.outreach);
     const by = k => items.filter(o => statusOf(o,'out') === k).length;
+    $('ct-outreach').textContent = by('new') || '';
     $('ocounts').textContent = by('new') + ' to look at · ' + by('saved') + ' interested · ' + by('sent') + ' sent · ' + by('skip') + ' not interested';
     if (api() && !CORR) loadCorr().then(() => { if (tab === 'outreach') renderOutreach(); }).catch(() => {});
     const list = $('olist'); list.replaceChildren();
@@ -545,6 +645,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       c.append(det);
       const row = el('div','row'); const left = el('div','acts');
       const href = safeUrl(o.url); if (href){ const a = el('a','open','Website'); a.href = href; a.target='_blank'; a.rel='noopener noreferrer'; left.append(a); }
+      if (api() && s !== 'sent' && !/@/.test(str(o.contact))) left.append(formButton('out', o, str(o.org), safeUrl((str(o.contactNote).match(/https:\/\/\S+/) || [''])[0]) || safeUrl(o.url) || '', c));
       if (api() && s !== 'sent'){
         const sb = el('button','btn solid','Send from here'); sb.type = 'button'; left.append(sb); let comp = null;
         sb.addEventListener('click', () => {
@@ -971,8 +1072,15 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     if (o.note) p.append(el('p','status warn', o.note));
     const g = el('div','grid2');
     const fromSel = field('select','from-' + uid); fromSel.disabled = true; opt(fromSel, '', 'Loading...');
-    const toIn = field('input','to-' + uid, st8.to != null ? st8.to : str(o.to), 'name@organisation.org'); toIn.type = 'email'; toIn.multiple = true; toIn.autocomplete = 'off';
-    g.append(labelled('From', fromSel), labelled('To', toIn)); p.append(g);
+    // Plain text box (iPhones can refuse pastes into email-type boxes); whatever is pasted is tidied to just the address.
+    const toIn = field('input','to-' + uid, st8.to != null ? st8.to : str(o.to), 'name@organisation.org'); toIn.type = 'text'; toIn.inputMode = 'email'; toIn.autocomplete = 'off'; toIn.spellcheck = false; toIn.setAttribute('autocapitalize','off'); toIn.setAttribute('autocorrect','off');
+    const tidyTo = () => { const found = (toIn.value.match(/[^\s<>"',;:()]+@[^\s<>"',;:()]+\.[a-z]{2,}/gi) || []); if (found.length && found.join(', ') !== toIn.value.trim()) { toIn.value = [...new Set(found.map(x => x.replace(/^mailto:/i,'')))].join(', '); toIn.dispatchEvent(new Event('input')); } };
+    toIn.addEventListener('paste', () => setTimeout(tidyTo, 0)); toIn.addEventListener('blur', tidyTo);
+    const pasteB = el('button','btn','Paste'); pasteB.type = 'button';
+    pasteB.addEventListener('click', async () => { try { const t = await navigator.clipboard.readText(); if (t) { toIn.value = t; tidyTo(); toIn.dispatchEvent(new Event('input')); } } catch(e){ toIn.focus(); } });
+    const toWrap = el('div'); toWrap.style.cssText = 'display:flex;gap:6px;align-items:center'; toIn.style.flex = '1'; toWrap.append(toIn, pasteB);
+    const toBox = el('div','fl'); const toLab = el('label','outh','To'); toLab.htmlFor = toIn.id; toBox.append(toLab, toWrap);
+    g.append(labelled('From', fromSel), toBox); p.append(g);
     const track = document.createElement('input'); track.type = 'checkbox'; track.id = 'trk-' + uid; track.checked = st8.track !== false;
     const trackL = el('label','chk'); trackL.append(track, el('span',null,'Also send replies to the media inbox, so they show on the Sent and replies tab')); trackL.hidden = true; p.append(trackL);
     const seg = el('div','seg'); seg.setAttribute('aria-label','Language of the email');
@@ -1068,6 +1176,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   // A bounce ("Address not found") names the address that failed; link it to the email that went there.
   function bounceOf(i){ if (!/^(mailer-daemon|postmaster)@/.test(i.addr)) return ''; return addrs(i.snippet + ' ' + i.subject).find(a => !/^(mailer-daemon|postmaster)@/.test(a) && !/googlemail\.com$|google\.com$/.test(a)) || ''; }
   function bouncedTo(list){ return CORR ? CORR.inbox.find(i => { const b = bounceOf(i); return b && list.includes(b); }) : null; }
+  const ALERT_DOMAINS = ['linkedin.com','indeed.com','indeedemail.com','theguardian.com','guardianjobs.co.uk','charityjob.co.uk','timewisejobs.co.uk','escapethecity.org','artsjobs.org.uk','culturejobs.org','jobs.ac.uk','reliefweb.int','devex.com','impactpool.org','welcometothejungle.com','apec.fr','totaljobs.com','reed.co.uk','glassdoor.com','glassdoor.co.uk','flexa.careers','thirdsectorjobs.co.uk','mandy.com','productionbase.co.uk','journalism.co.uk','podnews.net','unjobs.org','bbc.co.uk','francemediasmonde.com'];
+  function isJobAlert(i){ const d = (i.addr.split('@')[1] || ''); return ALERT_DOMAINS.some(x => d === x || d.endsWith('.' + x)) && !linkedSentRaw(i).length; }
+  function linkedSentRaw(i){ return CORR.sent.filter(m => m.t < i.t && addrs(m.to + ',' + m.cc).includes(i.addr)); }
   function isMuted(m){ return CORR.muted.includes(m.addr) || CORR.muted.includes(m.addr.split('@')[1] || ''); }
   // What kind of email was this: from the page's own record, or by matching the address or subject to a job or speculative suggestion.
   function kindOf(m){
@@ -1100,7 +1211,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const top = el('div','top'); const h = el('div');
     h.append(el('div','cat', fmtDay(i.t) + ' · ' + daysAgo(i.t) + (i.unread ? ' · unread' : '')), el('h2',null, (linked.length && !i.auto ? '★ ' : '') + i.subject), el('div','emp','From ' + i.from));
     const bnc = bounceOf(i);
-    top.append(h, el('span','badge ' + (linked.length && !i.auto ? 'new' : ''), bnc ? 'Not delivered' : i.auto ? (linked.length ? 'Automatic reply' : 'Automatic') : linked.length ? 'Reply' : muted ? 'Not interested' : 'Not linked to anything you sent'));
+    top.append(h, el('span','badge ' + (linked.length && !i.auto ? 'new' : ''), bnc ? 'Not delivered' : isJobAlert(i) ? 'Job alert' : i.auto ? (linked.length ? 'Automatic reply' : 'Automatic') : linked.length ? 'Reply' : muted ? 'Not interested' : 'Not linked to anything you sent'));
     if (bnc) c.append(el('p','status warn','The email to ' + bnc + ' did not arrive: that address does not work. Look for another contact on their website.'));
     c.append(top);
     if (linked.length) c.append(el('p','status','Linked (' + (whyLinked(i, linked[linked.length-1]) || 'same address') + ') to what you sent ' + fmtDay(linked[linked.length-1].t) + ': ' + linked[linked.length-1].subject));
@@ -1169,9 +1280,10 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const box = $('sentList'); if (!CORR){ refreshSent(); return; }
     box.replaceChildren();
     const live = CORR.inbox.filter(i => !isMuted(i));
-    const replies = live.filter(i => linkedSent(i).length), other = live.filter(i => !linkedSent(i).length && !i.auto);
+    const alerts = live.filter(isJobAlert), replies = live.filter(i => linkedSent(i).length && !isJobAlert(i)), other = live.filter(i => !linkedSent(i).length && !i.auto && !isJobAlert(i));
     const withReply = CORR.sent.filter(m => repliesTo(m).some(i => !i.auto)).length;
-    $('sentCounts').textContent = CORR.sent.length + ' sent · ' + withReply + ' with replies · ' + other.length + ' other emails · ' + (CORR.inbox.length - live.length) + ' not interested';
+    $('sentCounts').textContent = CORR.sent.length + ' sent · ' + withReply + ' with replies · ' + alerts.length + ' job alerts · ' + other.length + ' other emails · ' + (CORR.inbox.length - live.length) + ' not interested';
+    const fresh = replies.filter(i => !i.auto && Date.now() - i.t < 7 * 86400000).length; $('ct-sent').textContent = fresh ? '★ ' + fresh : '';
     if (cView === 'sent'){
       if (!CORR.sent.length){ box.append(el('p','status','Nothing sent from the application inbox yet.')); return; }
       CORR.sent.forEach(m => {
@@ -1190,8 +1302,8 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       });
       return;
     }
-    const list = cView === 'replies' ? replies : cView === 'other' ? other : cView === 'muted' ? CORR.inbox.filter(isMuted) : CORR.inbox;
-    if (!list.length){ box.append(el('p','status', cView === 'replies' ? 'No replies yet.' : cView === 'other' ? 'Nothing to sort.' : cView === 'muted' ? 'Nothing marked Not interested.' : 'The inbox is empty.')); return; }
+    const list = cView === 'replies' ? replies : cView === 'other' ? other : cView === 'jobs' ? alerts : cView === 'muted' ? CORR.inbox.filter(isMuted) : CORR.inbox;
+    if (!list.length){ box.append(el('p','status', cView === 'replies' ? 'No replies yet.' : cView === 'other' ? 'Nothing to sort.' : cView === 'jobs' ? 'No job alert emails yet. See Job alerts in the menu for how to set them up.' : cView === 'muted' ? 'Nothing marked Not interested.' : 'The inbox is empty.')); return; }
     if (cView === 'other') box.append(el('p','status','Emails that do not seem to come from anyone you wrote to. Mark spam to send them to the Gmail spam folder, or Not interested to stop them being highlighted.'));
     list.forEach(i => inboxCard(i, box, list));
   }
