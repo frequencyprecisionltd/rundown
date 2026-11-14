@@ -22,6 +22,12 @@ p{margin:0;white-space:pre-wrap}
 .more{align-self:flex-start;color:var(--accent);font-size:14px}
 .big{position:fixed;inset:0;background:rgba(0,0,0,.88);display:grid;place-items:center;z-index:9;cursor:zoom-out}
 .big img{max-width:96vw;max-height:94vh}
+body.full{background:#fff}body.full .box{max-width:760px;margin:0 auto;padding:28px 18px}body.full h2{font-size:28px}
+.bar{display:flex;align-items:center;gap:14px;text-decoration:none;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.bar:hover{border-color:var(--accent)}.bar img{width:54px;height:54px;object-fit:cover;border-radius:8px;flex:none}
+.bar .bt{flex:1;min-width:0}.bar b{display:block;font-size:17px}.bar span{font-size:14px;color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .go{flex:none;background:var(--accent);color:#fff;border-radius:999px;padding:7px 14px;font-size:14px}
+.rich{display:block}.rich>*{margin:0 0 10px}.rich>*:last-child{margin-bottom:0}.rich p{margin:0 0 10px}.rich img{max-width:100%;height:auto;border-radius:6px}.rich h3,.rich h4{margin:6px 0 0}.rich ul,.rich ol{margin:0;padding-left:22px}.rich blockquote{margin:0;padding-left:12px;border-left:3px solid var(--line);color:var(--muted)}.rich p{white-space:normal}.rich a{color:var(--accent)}
 [hidden]{display:none!important}
 </style></head><body><div class="box" id="box" hidden>
 <h2 id="title"></h2>
@@ -30,7 +36,14 @@ p{margin:0;white-space:pre-wrap}
 </div>
 <script>
 (function(){
-const API = "%%API%%", WHAT = "%%WHAT%%", LIMIT = Number("%%LIMIT%%") || 0, MORE = "%%MORE%%";
+const Q = new URLSearchParams(location.search), unset = v => v.indexOf('%' + '%') === 0;
+const RAW = {api:"%%API%%", what:"%%WHAT%%", limit:"%%LIMIT%%", more:"%%MORE%%", reader:"%%READER%%"};
+const FULL = Q.get('full') === '1';
+const API = unset(RAW.api) ? (Q.get('api') || '') : RAW.api, WHAT = unset(RAW.what) ? (Q.get('w') || 'journal') : RAW.what;
+const LIMIT = FULL ? 0 : (Number(unset(RAW.limit) ? Q.get('n') : RAW.limit) || 0), MORE = unset(RAW.more) ? '' : RAW.more;
+const READER = unset(RAW.reader) ? '' : RAW.reader;
+if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(API)) return;
+if (FULL) document.body.classList.add('full');
 const $ = id => document.getElementById(id);
 const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
 const safe = u => { try { const x = new URL(u); return x.protocol === 'https:' ? x.href : null; } catch(e){ return null; } };
@@ -46,6 +59,21 @@ function player(u){
   if (h === 'video') f.style.aspectRatio = '16/9'; else f.style.height = h + 'px';
   return f;
 }
+const OK_TAGS = {P:1,BR:1,B:1,STRONG:1,I:1,EM:1,U:1,H3:1,H4:1,UL:1,OL:1,LI:1,A:1,BLOCKQUOTE:1,IMG:1,DIV:1,SPAN:0};
+function clean(html){
+  const doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html'), out = document.createElement('div');
+  const walk = (src, dst) => src.childNodes.forEach(n => {
+    if (n.nodeType === 3){ dst.append(n.textContent); return; }
+    if (n.nodeType !== 1) return;
+    const t = n.tagName; if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|IFRAME|OBJECT|SVG|TITLE|HEAD|META)$/.test(t)) return; if (!(t in OK_TAGS)){ walk(n, dst); return; }
+    if (OK_TAGS[t] === 0){ walk(n, dst); return; }
+    if (t === 'IMG'){ const u = safe(n.getAttribute('src') || ''); if (u && /^https:\/\/(drive\.google\.com|lh3\.googleusercontent\.com)\//.test(u)){ const i = document.createElement('img'); i.src = u; i.alt = n.getAttribute('alt') || ''; i.loading = 'lazy'; i.addEventListener('click', () => zoom(u)); dst.append(i); } return; }
+    const e = document.createElement(t === 'DIV' ? 'p' : t.toLowerCase());
+    if (t === 'A'){ const u = safe(n.getAttribute('href') || ''); if (!u){ walk(n, dst); return; } e.href = u; e.target = '_blank'; e.rel = 'noopener'; }
+    walk(n, e); dst.append(e);
+  });
+  walk(doc.body.firstChild, out); return out;
+}
 function zoom(src){ const b = el('div','big'); const i = el('img'); i.src = src; i.alt = ''; b.append(i); b.addEventListener('click', () => b.remove()); document.body.append(b); }
 fetch(API + '?id=extras&w=' + WHAT, {cache:'no-store'}).then(r => r.json()).then(res => {
   if (!res || !res.on) return;
@@ -55,6 +83,15 @@ fetch(API + '?id=extras&w=' + WHAT, {cache:'no-store'}).then(r => r.json()).then
   const total = items.length; if (LIMIT) items = items.slice(0, LIMIT);
   $('title').textContent = res.title || ''; $('title').hidden = !res.title;
   $('box').hidden = false;
+  if (res.mode === 'collapsed' && !FULL){
+    const first = items[0], a = el('a','bar'); a.target = '_blank'; a.rel = 'noopener';
+    a.href = (READER || '') + '?full=1&w=' + encodeURIComponent(WHAT) + '&api=' + encodeURIComponent(API);
+    const pic = first.photos && first.photos[0] || first.photo || ((String(first.html || '').match(/src="(https:\/\/drive\.google\.com\/thumbnail\?id=[\w-]+)/) || [])[1]); if (pic){ const i = el('img'); i.src = pic; i.alt = ''; a.append(i); }
+    const bt = el('div','bt'); bt.append(el('b', null, res.title || 'Read more'), el('span', null, (WHAT === 'journal' ? 'Latest: ' + day(first.t) + (first.title ? ', ' + first.title : '') : first.title || '') + ' · ' + total + (total === 1 ? ' entry' : ' entries')));
+    a.append(bt, el('span','go','Read ▸')); $('title').hidden = true; $('list').append(a);
+    if (!READER) a.removeAttribute('href');
+    return;
+  }
   if (WHAT === 'projects' || (WHAT === 'journal' && LIMIT && LIMIT <= 4)) $('list').classList.add('grid');
   items.forEach(it => {
     const c = el('article','card'), inn = el('div','in');
@@ -65,7 +102,8 @@ fetch(API + '?id=extras&w=' + WHAT, {cache:'no-store'}).then(r => r.json()).then
     if (WHAT === 'projects' && it.photo && !it.media){ const i = el('img','cover'); i.src = it.photo; i.alt = it.title || ''; i.loading = 'lazy'; c.append(i); }
     if (WHAT === 'projects' && it.media){ const f = player(it.media); if (f) c.append(f); else if (it.photo){ const i = el('img','cover'); i.src = it.photo; i.alt = ''; c.append(i); } }
     if (it.title) inn.append(el('h3', null, it.title));
-    if (it.text) inn.append(el('p', null, it.text));
+    if (it.html){ const r = clean(it.html); r.className = 'rich'; inn.append(r); }
+    else if (it.text) inn.append(el('p', null, it.text));
     if (WHAT === 'audio'){ const f = it.player ? (() => { const x = el('iframe','frame'); x.src = it.player; x.style.height = '80px'; x.loading = 'lazy'; x.title = it.title || 'Audio'; x.allow = 'autoplay'; return x; })() : player(it.link); if (f) inn.append(f); }
     const ls = (it.links || []).map(l => ({label:l.label, url:safe(l.url)})).filter(l => l.url);
     if (WHAT === 'projects' && it.media && safe(it.media) && !player(it.media)) ls.unshift({label:'Open', url:safe(it.media)});

@@ -226,7 +226,7 @@ var REPO_COMMITS = 'https://api.github.com/repos/' + REPO + '/commits?path=data.
 // Files are shared "anyone with the link" so the website box can show them. Each section is off until switched on.
 var EXTRAS_FOLDER = 'Website extras', EXTRAS_KINDS = ['journal', 'audio', 'projects'];
 function extrasFolder_() { var it = DriveApp.getFoldersByName(EXTRAS_FOLDER); return it.hasNext() ? it.next() : DriveApp.createFolder(EXTRAS_FOLDER); }
-function extrasBlank_() { return { look: { accent: '#2c5a7a', font: 'Lato' }, settings: { journal: { on: false, title: 'Journal' }, audio: { on: false, title: 'Listen' }, projects: { on: false, title: 'Projects' } }, journal: [], audio: [], projects: [] }; }
+function extrasBlank_() { return { look: { accent: '#2c5a7a', font: 'Lato' }, settings: { journal: { on: false, title: 'Journal', mode: 'collapsed' }, audio: { on: false, title: 'Listen', mode: 'open' }, projects: { on: false, title: 'Projects', mode: 'open' } }, journal: [], audio: [], projects: [] }; }
 function extrasLoad_() {
   var c = CacheService.getScriptCache().get('extras'); if (c) { try { return JSON.parse(c); } catch (e) {} }
   var d = extrasBlank_(), it = extrasFolder_().getFilesByName('extras.json');
@@ -240,10 +240,10 @@ function extrasSave_(d) {
 }
 function str_(v, n) { return String(v == null ? '' : v).slice(0, n); }
 function cleanItem_(kind, it) {
-  var o = { id: str_(it.id, 40) || Utilities.getUuid().slice(0, 12), t: Number(it.t) || Date.now(), title: str_(it.title, 200), text: str_(it.text, 20000), hidden: !!it.hidden };
+  var o = { id: str_(it.id, 40) || Utilities.getUuid().slice(0, 12), t: Number(it.t) || Date.now(), title: str_(it.title, 200), text: str_(it.text, 20000), html: str_(it.html, 80000), hidden: !!it.hidden };
   var ids = function (a) { return (a || []).map(function (x) { return str_(x, 80); }).filter(function (x) { return /^[\w-]{10,80}$/.test(x); }).slice(0, 12); };
   var url = function (u) { u = str_(u, 600); return /^https:\/\/[^\s"'<>]+$/.test(u) ? u : ''; };
-  if (kind === 'journal') o.photos = ids(it.photos);
+  if (kind === 'journal') { o.photos = ids(it.photos); o.inline = (it.inline || []).map(function (x) { return str_(x, 80); }).filter(function (x) { return /^[\w-]{10,80}$/.test(x); }).slice(0, 40); }
   if (kind === 'audio') { o.file = ids([it.file])[0] || ''; o.link = url(it.link); }
   if (kind === 'projects') { o.photo = ids([it.photo])[0] || ''; o.media = url(it.media); o.links = (it.links || []).slice(0, 6).map(function (l) { return { label: str_(l.label, 60), url: url(l.url) }; }).filter(function (l) { return l.url; }); }
   return o;
@@ -259,7 +259,7 @@ function extras_(b) {
     return { ok: true, id: file.getId() };
   }
   if (b.op === 'look') { if (/^#[0-9a-f]{6}$/i.test(String(b.accent || ''))) d.look.accent = String(b.accent); if (b.font) d.look.font = str_(b.font, 40).replace(/[^\w ]/g, ''); extrasSave_(d); }
-  if (b.op === 'settings' && EXTRAS_KINDS.indexOf(kind) >= 0) { var s0 = d.settings[kind]; if (b.on != null) s0.on = !!b.on; if (b.title != null) s0.title = str_(b.title, 80); extrasSave_(d); }
+  if (b.op === 'settings' && EXTRAS_KINDS.indexOf(kind) >= 0) { var s0 = d.settings[kind]; if (b.on != null) s0.on = !!b.on; if (b.title != null) s0.title = str_(b.title, 80); if (b.mode === 'open' || b.mode === 'collapsed') s0.mode = b.mode; extrasSave_(d); }
   if (b.op === 'save' && list && b.item) {
     var it = cleanItem_(kind, b.item), i = list.map(function (x) { return x.id; }).indexOf(it.id);
     if (i >= 0) list[i] = it; else list.unshift(it);
@@ -269,7 +269,7 @@ function extras_(b) {
   if (b.op === 'delete' && list) {
     var j = list.map(function (x) { return x.id; }).indexOf(String(b.id));
     if (j >= 0) {
-      var gone = list[j], files = [].concat(gone.photos || [], gone.file ? [gone.file] : [], gone.photo ? [gone.photo] : []);
+      var gone = list[j], files = [].concat(gone.photos || [], gone.inline || [], gone.file ? [gone.file] : [], gone.photo ? [gone.photo] : []);
       files.forEach(function (fid) { try { DriveApp.getFileById(fid).setTrashed(true); } catch (e) {} });
       list.splice(j, 1); extrasSave_(d);
     }
@@ -287,13 +287,13 @@ function extrasPublic_(w) {
   if (!s0.on) return { ok: true, on: false, items: [] };
   var img = function (id) { return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1600'; };
   var items = d[w].filter(function (x) { return !x.hidden; }).map(function (x) {
-    var o = { id: x.id, t: x.t, title: x.title, text: x.text };
+    var o = { id: x.id, t: x.t, title: x.title, text: x.text, html: x.html || '' };
     if (w === 'journal') o.photos = (x.photos || []).map(img);
     if (w === 'audio') { o.player = x.file ? 'https://drive.google.com/file/d/' + x.file + '/preview' : ''; o.link = x.link || ''; }
     if (w === 'projects') { o.photo = x.photo ? img(x.photo) : ''; o.media = x.media || ''; o.links = x.links || []; }
     return o;
   });
-  return { ok: true, on: true, title: s0.title, look: d.look, items: items };
+  return { ok: true, on: true, title: s0.title, mode: s0.mode || 'open', look: d.look, items: items };
 }
 
 /* ---------- is a job advert still there? ---------- */

@@ -64,6 +64,9 @@ h1{font:700 clamp(28px,7vw,40px)/1.05 var(--display);margin:4px 0 0;letter-spaci
 .xitem img{width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:var(--line)}
 .xitem .xt{flex:1;min-width:0}.xitem .xt b{display:block;overflow-wrap:anywhere}.xitem .xt span{font-size:13px;color:var(--muted)}
 .xform{display:grid;gap:8px;margin-top:8px;border-top:1px dashed var(--line);padding-top:10px}
+.rtbar{display:flex;flex-wrap:wrap;gap:4px}.rtbar button{min-width:34px;padding:4px 8px}
+.rted{min-height:160px;max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg);color:var(--ink);font:16px/1.55 var(--body)}
+.rted:focus{outline:2px solid var(--accent, #2a78d6);outline-offset:1px}.rted img{max-width:100%;height:auto;border-radius:6px}.rted:empty::before{content:attr(data-ph);color:var(--muted)}
 .xthumbs{display:flex;flex-wrap:wrap;gap:6px}.xthumbs div{position:relative}.xthumbs img{width:70px;height:70px;object-fit:cover;border-radius:6px}
 .xthumbs button{position:absolute;top:-6px;right:-6px;border-radius:50%;width:22px;height:22px;padding:0;line-height:1}
 .tgh{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 6px}
@@ -1195,6 +1198,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const tIn = field('input', 'xt-' + K.k, S.title || ''); tIn.placeholder = 'Heading shown above it (leave empty for none)';
     tIn.addEventListener('change', async () => { try { await xcall({op:'settings', kind:K.k, title: tIn.value}); } catch(e){} });
     c.append(xlab('Heading on your website', tIn));
+    const mSel = document.createElement('select'); mSel.className = 'field'; opt(mSel, 'collapsed', 'Collapsed: a small bar until someone clicks to read'); opt(mSel, 'open', 'Open: shown in full on the page'); mSel.value = S.mode || (K.k === 'journal' ? 'collapsed' : 'open');
+    mSel.addEventListener('change', async () => { try { await xcall({op:'settings', kind:K.k, mode: mSel.value}); } catch(e){} });
+    c.append(xlab('How it shows on your website', mSel));
     const acts = el('div','acts'); const add = el('button','btn solid', '+ ' + K.add); add.type = 'button';
     const place = el('button','btn','Put it on my website'); place.type = 'button';
     acts.append(add, place); c.append(acts);
@@ -1232,18 +1238,73 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const r = await call({action:'extras', op:'upload', name: file.name, mime: isImage ? 'image/jpeg' : (file.type || 'audio/mpeg'), b64: await blobB64(blob)});
     return r.id;
   }
+  function richEditor(html){
+    const wrap = el('div'); wrap.style.cssText = 'display:grid;gap:6px';
+    const bar = el('div','rtbar'), ed = el('div','rted'); ed.contentEditable = 'true'; ed.dataset.ph = 'Write or paste here...'; ed.id = 'rt' + Math.random().toString(36).slice(2);
+    ed.innerHTML = sanitizeRich(html); let pending = 0;
+    const cmd = (c, v) => { ed.focus(); document.execCommand(c, false, v); };
+    const B = (label, title, fn) => { const b = el('button','btn',label); b.type = 'button'; b.title = title; b.addEventListener('mousedown', e => e.preventDefault()); b.addEventListener('click', fn); bar.append(b); };
+    B('B','Bold', () => cmd('bold')); B('I','Italic', () => cmd('italic')); B('U','Underline', () => cmd('underline'));
+    B('Heading','Heading', () => cmd('formatBlock','h3')); B('Text','Normal text', () => cmd('formatBlock','p'));
+    B('• List','Bulleted list', () => cmd('insertUnorderedList')); B('1. List','Numbered list', () => cmd('insertOrderedList'));
+    B('❝ Quote','Quote', () => cmd('formatBlock','blockquote'));
+    B('🔗 Link','Link the selected words', () => linkBox());
+    B('🖼 Picture','Add a picture here', () => pick.click()); B('Clear','Remove formatting from the selection', () => cmd('removeFormat'));
+    const pick = document.createElement('input'); pick.type = 'file'; pick.accept = 'image/*'; pick.multiple = true; pick.hidden = true;
+    pick.addEventListener('change', () => { [...pick.files].forEach(insertImage); pick.value = ''; });
+    const lb = el('div','acts'); lb.hidden = true; const lu = field('input', ed.id + 'l', '', 'https://...'); const lok = el('button','btn','Add link'); lok.type = 'button'; lb.append(lu, lok);
+    let saved = null;
+    function linkBox(){ const sel = getSelection(); saved = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null; lb.hidden = false; lu.focus(); }
+    lok.addEventListener('click', () => { const u = lu.value.trim(); if (/^https:\/\//.test(u) && saved){ const sel = getSelection(); sel.removeAllRanges(); sel.addRange(saved); cmd('createLink', u); } lb.hidden = true; lu.value = ''; });
+    const st = el('span','status');
+    async function insertImage(file){
+      pending++; st.textContent = 'Uploading picture...';
+      const ph = document.createElement('img'); ph.alt = 'Uploading...'; ph.style.opacity = '.4'; ph.src = URL.createObjectURL(file);
+      ed.focus(); const sel = getSelection(); if (sel.rangeCount && ed.contains(sel.anchorNode)){ const r = sel.getRangeAt(0); r.collapse(false); r.insertNode(ph); } else ed.append(ph);
+      { const r = document.createRange(); r.setStartAfter(ph); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); }
+      try { const id = await xupload(file, true); ph.src = 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1600'; ph.dataset.id = id; ph.alt = ''; ph.style.opacity = ''; }
+      catch(e){ ph.remove(); st.textContent = 'A picture could not be uploaded.'; }
+      pending--; if (!pending && st.textContent === 'Uploading picture...') st.textContent = '';
+    }
+    ed.addEventListener('paste', e => {
+      const items = [...(e.clipboardData && e.clipboardData.items || [])], imgs = items.filter(i => i.kind === 'file' && /^image\//.test(i.type));
+      if (imgs.length){ e.preventDefault(); imgs.forEach(i => insertImage(i.getAsFile())); return; }
+      const h = e.clipboardData && e.clipboardData.getData('text/html');
+      if (h){ e.preventDefault(); document.execCommand('insertHTML', false, sanitizeRich(h, true)); }
+    });
+    ed.addEventListener('drop', e => { const fs = [...(e.dataTransfer && e.dataTransfer.files || [])].filter(f => /^image\//.test(f.type)); if (fs.length){ e.preventDefault(); fs.forEach(insertImage); } });
+    wrap.append(bar, lb, ed, st, pick);
+    return { wrap, busy: () => pending > 0, value: () => { const h = sanitizeRich(ed.innerHTML); const d = document.createElement('div'); d.innerHTML = h; return { html: h, text: d.innerText.trim(), inline: [...d.querySelectorAll('img[data-id]')].map(i => i.dataset.id) }; } };
+  }
+  function sanitizeRich(html, pasted){
+    const OK = {P:1,BR:1,B:1,STRONG:1,I:1,EM:1,U:1,H3:1,H4:1,UL:1,OL:1,LI:1,A:1,BLOCKQUOTE:1,IMG:1,DIV:1,H1:'h3',H2:'h3',H5:'h4',H6:'h4'};
+    const doc = new DOMParser().parseFromString('<div>' + str(html) + '</div>', 'text/html'), out = document.createElement('div');
+    const walk = (src, dst) => src.childNodes.forEach(n => {
+      if (n.nodeType === 3){ dst.append(n.textContent); return; }
+      if (n.nodeType !== 1) return; const t = n.tagName;
+      if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|IFRAME|OBJECT|SVG|TITLE|HEAD|META)$/.test(t)) return;
+      if (!OK[t]){ walk(n, dst); return; }
+      if (t === 'IMG'){ const u = str(n.getAttribute('src')); if (/^https:\/\/drive\.google\.com\/thumbnail\?id=[\w-]+/.test(u) && !pasted){ const i = document.createElement('img'); i.src = u; i.alt = ''; if (n.dataset.id) i.dataset.id = n.dataset.id; else { const m = u.match(/id=([\w-]+)/); if (m) i.dataset.id = m[1]; } dst.append(i); } return; }
+      const e = document.createElement(typeof OK[t] === 'string' ? OK[t] : t === 'DIV' ? 'p' : t.toLowerCase());
+      if (t === 'A'){ const u = str(n.getAttribute('href')); if (!/^https:\/\//.test(u)){ walk(n, dst); return; } e.href = u; }
+      walk(n, e); dst.append(e);
+    });
+    walk(doc.body.firstChild, out); return out.innerHTML;
+  }
   function xform(K, it, box){
     it = it ? JSON.parse(JSON.stringify(it)) : {}; const f = el('div','xform'); const uid = K.k + (it.id || 'new');
     f.append(el('div','outh', it.id ? 'Edit' : K.add));
     const title = field('input','xti-' + uid, it.title || ''); title.placeholder = K.k === 'journal' ? 'Title (optional)' : 'Title';
     const text = field('textarea','xtx-' + uid, it.text || ''); text.rows = K.k === 'journal' ? 6 : 3; text.placeholder = K.k === 'journal' ? 'Write here, or paste text from anywhere' : 'A short description';
-    f.append(xlab('Title', title), xlab(K.k === 'journal' ? 'Text' : 'Description', text));
+    let rted = null;
+    if (K.k === 'journal'){ rted = richEditor(it.html || (it.text ? esc(it.text).replace(/\n/g,'<br>') : '')); f.append(xlab('Title', title), xlab('Text (type, paste text or pictures, and format with the buttons)', rted.wrap)); }
+    else f.append(xlab('Title', title), xlab('Description', text));
     const thumbs = el('div','xthumbs'), photos = K.k === 'journal' ? (it.photos || []).slice() : (it.photo ? [it.photo] : []);
     const drawThumbs = () => { thumbs.replaceChildren(...photos.map((p, i) => { const d = el('div'); const im = el('img'); im.src = xthumb(p); im.alt = ''; const x = el('button','btn','×'); x.type = 'button'; x.title = 'Remove this photo'; x.addEventListener('click', () => { photos.splice(i, 1); drawThumbs(); }); d.append(im, x); return d; })); };
     let fileIn = null, linkIn = null, mediaIn = null; const linkRows = [];
     if (K.k !== 'audio'){
       fileIn = document.createElement('input'); fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.multiple = K.k === 'journal'; fileIn.className = 'field';
-      f.append(xlab(K.k === 'journal' ? 'Photos (choose several, or take one now)' : 'Picture', fileIn), thumbs); drawThumbs();
+      f.append(xlab(K.k === 'journal' ? 'Photo gallery at the top (optional: choose several, or take one now)' : 'Picture', fileIn), thumbs); drawThumbs();
     }
     if (K.k === 'audio'){
       fileIn = document.createElement('input'); fileIn.type = 'file'; fileIn.accept = 'audio/*'; fileIn.className = 'field';
@@ -1274,8 +1335,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
           if (!it.file && !it.link) throw new Error('Choose an audio file or paste a link.');
         }
         if (K.k === 'projects'){ it.media = mediaIn.value.trim(); it.links = linkRows.map(([a, b]) => ({label: a.value.trim(), url: b.value.trim()})).filter(l => /^https:\/\//.test(l.url)); }
-        it.title = title.value.trim(); it.text = text.value;
-        if (K.k === 'journal' && !it.title && !it.text.trim() && !(it.photos || []).length) throw new Error('Add a photo or some text first.');
+        it.title = title.value.trim();
+        if (rted){ if (rted.busy()) throw new Error('A picture is still uploading. Wait a moment, then press Post again.'); const r = rted.value(); it.html = r.html; it.text = r.text; it.inline = r.inline; } else it.text = text.value;
+        if (K.k === 'journal' && !it.title && !it.text.trim() && !(it.photos || []).length && !(it.inline || []).length) throw new Error('Add a photo or some text first.');
         st.textContent = 'Saving...';
         await xcall({op:'save', kind:K.k, item:it});
         box.replaceChildren(); renderExtras();
@@ -1293,7 +1355,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       const P = XPLACES.find(p => p.v === sel.value); how.textContent = P.how + ' Then press Publish.';
       more.parentNode && (more.parentNode.hidden = sel.value === '0');
       try { if (!tpl) tpl = await (await fetch('public-cv/extras-box.html?t=' + Date.now(), {cache:'no-store'})).text(); } catch(e){ code.value = 'Could not load the code. Try again.'; return; }
-      code.value = tpl.replace('%%API%%', api().url).replace('%%WHAT%%', K.k).replace('%%LIMIT%%', sel.value).replace('%%MORE%%', sel.value === '0' ? '' : more.value.trim());
+      code.value = tpl.replace('%%API%%', api().url).replace('%%WHAT%%', K.k).replace('%%LIMIT%%', sel.value).replace('%%MORE%%', sel.value === '0' ? '' : more.value.trim()).replace('%%READER%%', location.origin + location.pathname.replace(/[^/]*$/, '') + 'public-cv/extras-box.html');
     };
     sel.addEventListener('change', draw); more.addEventListener('change', draw);
     cp.addEventListener('click', () => { copy(code.value, cp, code); st.textContent = 'Copied. Now paste it into your website as described above.'; });
