@@ -26,7 +26,7 @@
  *   {action:"vault", token, blob?}                      password notes, encrypted in the browser with the page password
  *   {action:"messages", token}                          messages sent through the website contact form
  *   {action:"correspondence", token}                    sent folder and inbox (last 400 days, flags auto replies) and the not interested list
- *   {action:"mail", token, op:"spam"|"mute"|"unmute", thread?, who?}  move a thread to spam, or mute/unmute a sender or domain
+ *   {action:"mail", token, op:"read"|"spam"|"mute"|"unmute", thread?, who?}  read a thread's full text, move a thread to spam, or mute/unmute a sender or domain
  *   {action:"marks", token, set?}                       Interested / Applied / Sent / Not interested marks shared across devices
  *   {action:"notify", token, to?}                      where activity alerts go (her personal inbox); activityCheck() runs hourly after setupAlerts()
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
@@ -165,7 +165,15 @@ function correspondence_() {
   sent.sort(function (a, b) { return b.t - a.t; }); inbox.sort(function (a, b) { return b.t - a.t; });
   return { ok: true, account: mine[0], sent: sent, inbox: inbox, muted: muted_() };
 }
+function mailBody_(b) {
+  var th = GmailApp.getThreadById(String(b.thread || '')); if (!th) return { ok: false };
+  var msgs = th.getMessages().slice(-6);
+  return { ok: true, subject: th.getFirstMessageSubject(), messages: msgs.map(function (m) {
+    return { t: m.getDate().getTime(), from: String(m.getFrom() || '').slice(0, 160), to: String(m.getTo() || '').slice(0, 300), body: m.getPlainBody().replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').slice(0, 12000) };
+  }) };
+}
 function mail_(b) {
+  if (b.op === 'read' && b.thread) return mailBody_(b);
   if (b.op === 'spam' && b.thread) { GmailApp.getThreadById(String(b.thread)).moveToSpam(); return { ok: true }; }
   if (b.op === 'mute' || b.op === 'unmute') {
     var who = String(b.who || '').toLowerCase().trim(); if (!who || who.length > 120) return { ok: false };

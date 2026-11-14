@@ -1082,9 +1082,11 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   // Replies: anything in the inbox after the email went, from the same address or the same organisation's domain, in any thread.
   function repliesTo(m){
     const ta = addrs(m.to + ',' + m.cc), ds = ta.map(dom).filter(Boolean);
-    return CORR.inbox.filter(i => i.t > m.t && !isMuted(i) && !bounceOf(i) && (ta.includes(i.addr) || ds.some(d => sameDom(dom(i.addr), d))));
+    return CORR.inbox.filter(i => i.t > m.t && !isMuted(i) && !bounceOf(i) && whyLinked(i, m));
   }
-  function linkedSent(i){ const b = bounceOf(i); if (b) return CORR.sent.filter(m => m.t <= i.t && addrs(m.to + ',' + m.cc).includes(b)); return CORR.sent.filter(m => m.t < i.t && (addrs(m.to + ',' + m.cc).includes(i.addr) || addrs(m.to + ',' + m.cc).map(dom).filter(Boolean).some(d => sameDom(dom(i.addr), d)))); }
+  function bareSubj(x){ return str(x).toLowerCase().replace(/^((re|fwd?|fw|tr|réf|aw|wg|antw|ответ)\s*:\s*|(automatic reply|réponse automatique|auto(matic)?[- ]?reply|out of office)\s*:?\s*)+/gi,'').replace(/\s+/g,' ').trim(); }
+  function whyLinked(i, m){ const ta = addrs(m.to + ',' + m.cc); if (ta.includes(i.addr)) return 'same address'; if (ta.map(dom).filter(Boolean).some(d => sameDom(dom(i.addr), d))) return 'same organisation'; const a = bareSubj(i.subject), b = bareSubj(m.subject); if (a && b && a.length > 8 && (a === b || a.includes(b) || b.includes(a))) return 'same subject'; return ''; }
+  function linkedSent(i){ const b = bounceOf(i); if (b) return CORR.sent.filter(m => m.t <= i.t && addrs(m.to + ',' + m.cc).includes(b)); return CORR.sent.filter(m => m.t < i.t && whyLinked(i, m)); }
   async function refreshSent(){
     const box = $('sentList');
     if (!api()){ box.replaceChildren(el('p','status','Sending is not switched on yet.')); return; }
@@ -1092,7 +1094,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     try { await loadCorr(true); } catch(e){ box.replaceChildren(el('p','status','Could not load. Check your connection.')); return; }
     renderCorr();
   }
-  function inboxCard(i, box){
+  function inboxCard(i, box, list){
     const linked = linkedSent(i), muted = isMuted(i);
     const c = el('article','slot ' + (linked.length ? 'outreach' : 'london') + (muted ? ' pass' : ''));
     const top = el('div','top'); const h = el('div');
@@ -1101,9 +1103,11 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     top.append(h, el('span','badge ' + (linked.length && !i.auto ? 'new' : ''), bnc ? 'Not delivered' : i.auto ? (linked.length ? 'Automatic reply' : 'Automatic') : linked.length ? 'Reply' : muted ? 'Not interested' : 'Not linked to anything you sent'));
     if (bnc) c.append(el('p','status warn','The email to ' + bnc + ' did not arrive: that address does not work. Look for another contact on their website.'));
     c.append(top);
-    if (linked.length) c.append(el('p','status','About what you sent ' + fmtDay(linked[0].t) + ': ' + linked[0].subject));
-    c.append(el('div','mail', str(i.snippet) + (str(i.snippet).length >= 260 ? '...' : '')));
-    const r = el('div','acts'); const a = el('a','open','Open in Gmail'); a.href = gmailLink(i.thread); a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a);
+    if (linked.length) c.append(el('p','status','Linked (' + (whyLinked(i, linked[linked.length-1]) || 'same address') + ') to what you sent ' + fmtDay(linked[linked.length-1].t) + ': ' + linked[linked.length-1].subject));
+    const body = el('div','mail', str(i.snippet) + (str(i.snippet).length >= 260 ? '...' : '')); c.append(body);
+    const r = el('div','acts');
+    const rd = el('button','btn solid','Read in full'); rd.type = 'button'; rd.addEventListener('click', () => openReader(list, list.indexOf(i))); r.append(rd);
+    const a = el('a','open','Open in Gmail'); a.href = gmailLink(i.thread); a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a);
     const st = el('span','status');
     if (!linked.length && !muted){
       const sp = el('button','btn','This is spam'); sp.type = 'button';
@@ -1124,6 +1128,42 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       r.append(un);
     }
     r.append(st); c.append(r); box.append(c);
+  }
+  // Reader: full text of one email at a time, with Previous and Next to flick through the list being shown.
+  async function openReader(list, idx){
+    let dlg = document.getElementById('reader');
+    if (!dlg){ dlg = document.createElement('dialog'); dlg.id = 'reader'; dlg.style.cssText = 'max-width:760px;width:92vw;max-height:88vh;border:1px solid var(--line);border-radius:10px;padding:0;background:var(--bg);color:var(--ink)'; document.body.append(dlg); }
+    const i = list[idx]; if (!i) return;
+    const linked = linkedSent(i), bnc = bounceOf(i);
+    const head = el('div'); head.style.cssText = 'position:sticky;top:0;background:var(--bg);padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+    const prev = el('button','btn','Previous'), next = el('button','btn','Next'), close = el('button','btn','Close'); [prev,next,close].forEach(b => b.type = 'button');
+    prev.disabled = idx <= 0; next.disabled = idx >= list.length - 1;
+    prev.onclick = () => openReader(list, idx - 1); next.onclick = () => openReader(list, idx + 1); close.onclick = () => dlg.close();
+    head.append(prev, next, el('span','status', (idx + 1) + ' of ' + list.length), close);
+    const main = el('div'); main.style.cssText = 'padding:14px 16px;overflow:auto';
+    main.append(el('div','cat', fmtDay(i.t) + ' · ' + daysAgo(i.t)), el('h2',null,i.subject), el('div','emp','From ' + i.from));
+    if (bnc) main.append(el('p','status warn','Not delivered: ' + bnc + ' does not work.'));
+    else if (linked.length) main.append(el('p','status good','★ Linked (' + whyLinked(i, linked[linked.length-1]) + ') to what you sent ' + fmtDay(linked[linked.length-1].t) + ': ' + linked[linked.length-1].subject));
+    else main.append(el('p','status','Not linked to anything you sent.'));
+    const txt = el('div','mail','Loading the full email...'); txt.style.whiteSpace = 'pre-wrap'; main.append(txt);
+    const acts = el('div','acts'); const st = el('span','status');
+    if (!linked.length && !isMuted(i)){
+      const sp = el('button','btn','This is spam'); sp.type = 'button';
+      sp.onclick = async () => { sp.disabled = true; try { await call({action:'mail', op:'spam', thread:i.thread}); CORR.inbox = CORR.inbox.filter(x => x.thread !== i.thread); list.splice(idx,1); renderCorr(); list.length ? openReader(list, Math.min(idx, list.length - 1)) : dlg.close(); } catch(e){ sp.disabled = false; st.textContent = 'Could not move it.'; } };
+      acts.append(sp);
+    }
+    if (!isMuted(i)){
+      const ni = el('button','btn','Not interested'); ni.type = 'button';
+      ni.onclick = async () => { ni.disabled = true; try { const res = await call({action:'mail', op:'mute', who:i.addr}); CORR.muted = arr(res.muted); renderCorr(); next.disabled ? dlg.close() : openReader(list, idx + 1); } catch(e){ ni.disabled = false; } };
+      acts.append(ni);
+    }
+    const g = el('a','open','Open in Gmail'); g.href = gmailLink(i.thread); g.target = '_blank'; g.rel = 'noopener noreferrer'; acts.append(g, st);
+    main.append(acts);
+    dlg.replaceChildren(head, main); if (!dlg.open) dlg.showModal();
+    try {
+      const r = await call({action:'mail', op:'read', thread:i.thread});
+      txt.replaceChildren(); arr(r.messages).forEach((m, n) => { if (n) txt.append(el('hr')); txt.append(el('div','subj', m.from + ', ' + fmtDay(m.t)), document.createTextNode(m.body)); });
+    } catch(e){ txt.textContent = str(i.snippet) + '\n\n(Could not load the full text. Use Open in Gmail.)'; }
   }
   function renderCorr(){
     const box = $('sentList'); if (!CORR){ refreshSent(); return; }
@@ -1153,7 +1193,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const list = cView === 'replies' ? replies : cView === 'other' ? other : cView === 'muted' ? CORR.inbox.filter(isMuted) : CORR.inbox;
     if (!list.length){ box.append(el('p','status', cView === 'replies' ? 'No replies yet.' : cView === 'other' ? 'Nothing to sort.' : cView === 'muted' ? 'Nothing marked Not interested.' : 'The inbox is empty.')); return; }
     if (cView === 'other') box.append(el('p','status','Emails that do not seem to come from anyone you wrote to. Mark spam to send them to the Gmail spam folder, or Not interested to stop them being highlighted.'));
-    list.forEach(i => inboxCard(i, box));
+    list.forEach(i => inboxCard(i, box, list));
   }
 
   /* ---------- alerts ---------- */
