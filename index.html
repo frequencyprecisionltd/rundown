@@ -297,7 +297,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     <section id="handoverView" hidden class="controls">
       <p class="sub">Everything another AI assistant would need to keep this page, your website and your CVs running if Claude is ever not available: what each part is, where it lives, the passwords and keys, and how the daily search works, followed by your general CV. Copy it and paste it into the new assistant as your first message. Keep it private: it contains the keys to everything.</p>
       <p class="sub">The full backup is one zip file with the latest code for this page, your Google service and your website boxes, taken straight from GitHub, plus all your current data unencrypted and these notes. Save it somewhere safe, such as your Google Drive, so a web developer or another assistant can rebuild everything even if GitHub or Claude disappear. Make a fresh one now and then.</p>
-      <div class="acts"><button type="button" class="btn solid" id="hoCopy">Copy handover</button><button type="button" class="btn" id="hoDl">Download as a file</button><button type="button" class="btn" id="hoZip">Download full backup (.zip)</button><span class="status" id="hoSt"></span></div>
+      <div class="acts"><button type="button" class="btn solid" id="hoCopy">Copy handover</button><button type="button" class="btn" id="hoDl">Download as a file</button><button type="button" class="btn" id="hoZip">Download full backup (.zip)</button><button type="button" class="btn" id="hoPrompt">Copy the prompt for a new agent</button><span class="status" id="hoSt"></span></div>
       <div class="mail" id="hoText" style="max-height:480px;overflow:auto;font-size:13px"></div>
       <h2 style="margin-top:10px">Password notes</h2>
       <p class="sub">Somewhere safe to keep logins for your Google account, Squarespace and anything else. They are locked with this page's password inside your browser before they are saved, so nobody without the page password can read them, not even the services that store them. If you ever change the page password, open this first and save it again afterwards.</p>
@@ -981,9 +981,10 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   }
   function renderHandover(){ $('hoText').textContent = handoverText(); }
   $('hoCopy').addEventListener('click', () => copy(handoverText(), $('hoCopy'), $('hoText')));
+  $('hoPrompt').addEventListener('click', () => { const t = str((DATA.handover || {}).text), i = t.search(/^## \d+\. Prompt for a new agent/m); const body = i < 0 ? handoverText() : t.slice(t.indexOf('\n', i) + 1).trim(); copy(body, $('hoPrompt'), $('hoText')); $('hoSt').textContent = 'Prompt copied. Paste it into the new agent, then give it access to the code.'; });
   $('hoDl').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([handoverText()], {type:'text/markdown'})); a.download = 'handover.md'; document.body.append(a); a.click(); a.remove(); $('hoSt').textContent = 'Saved as handover.md'; });
 
-  const REPO_FILES = ['index.html','build_data.py','README.md','apps-script/Code.gs','public-cv/contact-box.html','public-cv/widget-template.html','public-cv/make_widget.py','data.enc.json'];
+  const REPO_FILES = ['index.html','build_data.py','README.md','tools/rundown_data.py','tools/publish.sh','apps-script/Code.gs','public-cv/contact-box.html','public-cv/widget-template.html','public-cv/make_widget.py','data.enc.json'];
   $('hoZip').addEventListener('click', async () => {
     const b = $('hoZip'), st = $('hoSt'); b.disabled = true; st.textContent = 'Gathering the latest files...';
     try {
@@ -1004,7 +1005,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         'Backup made ' + new Date().toLocaleString('en-GB') + '.',
         '',
         'HANDOVER.md explains every part of the system, with passwords and keys. Give it to a web developer or an AI assistant first.',
-        'code/ is the latest version of everything in the GitHub repository frequencyprecisionltd/rundown.',
+        'code/ is the latest version of everything in the board repository (upload it to a new GitHub repository or any web host to start again; see section 7 of HANDOVER.md).',
         'data/all-data.json is all current jobs, speculative emails, CVs and settings, unencrypted.',
         '',
         'Keep this file private.',
