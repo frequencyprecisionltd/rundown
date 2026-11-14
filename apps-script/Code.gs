@@ -25,7 +25,10 @@
  *   {action:"cvbase", token, cv?, original?, label?}     her general CV as edited on the private page, with up to 15 earlier versions
  *   {action:"vault", token, blob?}                      password notes, encrypted in the browser with the page password
  *   {action:"messages", token}                          messages sent through the website contact form
- *   {action:"notify", token, to?}                       where activity alerts go (her personal inbox); activityCheck() runs hourly after setupAlerts()
+ *   {action:"correspondence", token}                    sent folder and inbox (last 400 days, flags auto replies) and the not interested list
+ *   {action:"mail", token, op:"spam"|"mute"|"unmute", thread?, who?}  move a thread to spam, or mute/unmute a sender or domain
+ *   {action:"marks", token, set?}                       Interested / Applied / Sent / Not interested marks shared across devices
+ *   {action:"notify", token, to?}                      where activity alerts go (her personal inbox); activityCheck() runs hourly after setupAlerts()
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
  *
  * The service never sees codes or readable CVs: browsers encrypt with the code before sending,
@@ -128,6 +131,59 @@ function sentStatus_() {
   });
 }
 
+/* ---------- correspondence: whole sent folder and inbox ---------- */
+var AUTO_RE = /^(automatic reply|auto(matic)?[- ]?reply|out of (the )?office|auto:|r[ée]ponse automatique|absence|abwesenheit|автоответ|i am (currently )?(away|out)|thank you for (your )?(email|message|application)|we have received)/i;
+var GENERIC_DOMAINS = ['gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.co.uk', 'outlook.com', 'live.com', 'live.co.uk', 'yahoo.com', 'yahoo.co.uk', 'yahoo.fr', 'icloud.com', 'me.com', 'aol.com', 'btinternet.com', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.de', 'orange.fr', 'free.fr', 'wanadoo.fr', 'mail.ru', 'yandex.ru', 'yandex.com', 'web.de', 'sky.com', 'virginmedia.com'];
+function addr_(s) { return ((String(s || '').match(/[^\s<>"',;]+@[^\s<>"',;]+/) || [''])[0]).toLowerCase(); }
+function isAuto_(m) {
+  try {
+    var as = String(m.getHeader('Auto-Submitted') || ''), xa = String(m.getHeader('X-Autoreply') || m.getHeader('X-Autorespond') || ''), pr = String(m.getHeader('Precedence') || '');
+    if ((as && as.toLowerCase() !== 'no') || xa || /auto_reply|bulk|junk/i.test(pr)) return true;
+  } catch (e) {}
+  return AUTO_RE.test(String(m.getSubject() || '')) || /^(mailer-daemon|postmaster|no-?reply|donotreply)@/i.test(addr_(m.getFrom()));
+}
+function muted_() { try { return JSON.parse(PROPS.getProperty('muted') || '[]'); } catch (e) { return []; } }
+function correspondence_() {
+  var mine = [me_()].concat(GmailApp.getAliases()).map(function (s) { return s.toLowerCase(); });
+  var refs = {}; sentList_().forEach(function (s) { if (s.thread) refs[s.thread] = s.ref || null; });
+  var sent = [], inbox = [];
+  GmailApp.search('in:sent newer_than:400d', 0, 120).forEach(function (th) {
+    th.getMessages().forEach(function (m) {
+      if (mine.indexOf(addr_(m.getFrom())) < 0) return;
+      sent.push({ t: m.getDate().getTime(), to: String(m.getTo() || '').slice(0, 300), cc: String(m.getCc() || '').slice(0, 200), subject: String(m.getSubject() || '').slice(0, 200), thread: th.getId(), ref: refs[th.getId()] || null, from: addr_(m.getFrom()) });
+    });
+  });
+  GmailApp.search('in:inbox newer_than:400d', 0, 120).forEach(function (th) {
+    var msgs = th.getMessages();
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      var m = msgs[i], f = addr_(m.getFrom());
+      if (mine.indexOf(f) >= 0) continue;
+      inbox.push({ t: m.getDate().getTime(), from: String(m.getFrom() || '').slice(0, 160), addr: f, subject: String(m.getSubject() || '').slice(0, 200), snippet: m.getPlainBody().replace(/\s+/g, ' ').slice(0, 260), thread: th.getId(), auto: isAuto_(m), unread: th.isUnread(), count: msgs.length });
+      break;
+    }
+  });
+  sent.sort(function (a, b) { return b.t - a.t; }); inbox.sort(function (a, b) { return b.t - a.t; });
+  return { ok: true, account: mine[0], sent: sent, inbox: inbox, muted: muted_() };
+}
+function mail_(b) {
+  if (b.op === 'spam' && b.thread) { GmailApp.getThreadById(String(b.thread)).moveToSpam(); return { ok: true }; }
+  if (b.op === 'mute' || b.op === 'unmute') {
+    var who = String(b.who || '').toLowerCase().trim(); if (!who || who.length > 120) return { ok: false };
+    var list = muted_().filter(function (x) { return x !== who; }); if (b.op === 'mute') list.push(who);
+    PROPS.setProperty('muted', JSON.stringify(list.slice(-300))); return { ok: true, muted: list };
+  }
+  return { ok: false };
+}
+/* ---------- marks (Interested, Applied, Sent, Not interested), shared across devices ---------- */
+function marks_(b) {
+  var m; try { m = JSON.parse(load_('marks') || '{}'); } catch (e) { m = {}; }
+  if (b.set && typeof b.set === 'object') {
+    Object.keys(b.set).slice(0, 200).forEach(function (k) { if (/^(job|out):[\w.-]{1,80}$/.test(k)) { var v = String(b.set[k]).slice(0, 20); if (v === 'new') delete m[k]; else m[k] = { s: v, t: Date.now() }; } });
+    save_('marks', JSON.stringify(m));
+  }
+  return { ok: true, marks: m };
+}
+
 /* ---------- activity alerts to her personal inbox ---------- */
 // The address lives only in Script Properties (key "notifyTo"), set from the private page or the editor's Project Settings.
 var PAGE_URL = 'https://frequencyprecisionltd.github.io/rundown/';
@@ -151,16 +207,21 @@ function activityCheck() {
       if (notes.length) lines.push({ text: 'New on your board: ' + notes.reverse().join('; ') + '.' }); // a plain "Update" (nothing new) sends nothing
     }
   } catch (e) {}
-  // 2. Replies to applications sent from the page.
-  var seen; try { seen = JSON.parse(PROPS.getProperty('alertSeen') || '{}'); } catch (x) { seen = {}; }
-  sentStatus_().forEach(function (s) {
-    if (!s.thread || !s.replies) return;
-    if ((seen[s.thread] || 0) < s.replies) {
-      lines.push({ text: 'Reply to "' + s.subject + '" from ' + (s.lastFrom || 'the employer') + ': ' + (s.snippet || ''), strong: true });
-      seen[s.thread] = s.replies;
-    }
-  });
-  PROPS.setProperty('alertSeen', JSON.stringify(seen));
+  // 2. New emails in the application inbox: replies from anyone she wrote to (same address or same organisation domain,
+  //    any thread), automatic replies, and other new mail. Senders marked Not interested are ignored.
+  try {
+    var c = correspondence_(), muted = c.muted, wrote = {}, wroteDom = {};
+    c.sent.forEach(function (s) { (s.to + ',' + s.cc).split(/[,;]/).map(addr_).filter(String).forEach(function (a) { wrote[a] = s.subject; var d = a.split('@')[1]; if (GENERIC_DOMAINS.indexOf(d) < 0) wroteDom[d] = s.subject; }); });
+    var others = 0;
+    c.inbox.filter(function (m) { return m.t > last; }).forEach(function (m) {
+      var dom = m.addr.split('@')[1] || '';
+      if (muted.indexOf(m.addr) >= 0 || muted.indexOf(dom) >= 0) return;
+      var about = wrote[m.addr] || wroteDom[dom];
+      if (about) lines.push({ text: (m.auto ? 'Automatic reply' : 'Reply') + ' from ' + m.from + ' (you wrote: "' + about + '"): ' + m.snippet, strong: !m.auto });
+      else if (!m.auto) others++;
+    });
+    if (others) lines.push({ text: others + (others === 1 ? ' other new email' : ' other new emails') + ' in your application inbox. Open Correspondence to sort them.' });
+  } catch (e) {}
   // 3. Messages through the website.
   var msgs; try { msgs = JSON.parse(load_('messages') || '[]'); } catch (x) { msgs = []; }
   var fresh = msgs.filter(function (m) { return m.t > last; });
@@ -168,7 +229,7 @@ function activityCheck() {
   PROPS.setProperty('alertLast', String(now));
   if (!lines.length) return 'nothing new';
   var replies = lines.some(function (l) { return l.strong; });
-  var subject = replies ? 'Someone has replied to one of your applications' : 'New activity on your job board';
+  var subject = replies ? 'Someone has replied to you' : 'New activity on your job board';
   var text = 'Hello,\n\n' + lines.map(function (l) { return '* ' + l.text; }).join('\n') + '\n\nOpen your board to see everything:\n' + PAGE_URL + '\n';
   var html = '<p>Hello,</p><ul>' + lines.map(function (l) { return '<li>' + (l.strong ? '<b>' + esc_(l.text) + '</b>' : esc_(l.text)) + '</li>'; }).join('') +
     '</ul><p><a href="' + PAGE_URL + '">Open your board</a> to see everything.</p><p style="color:#777;font-size:12px">' + PAGE_URL + '</p>';
@@ -286,6 +347,9 @@ function doPost(e) {
     }
     if (b.action === 'send') return out_(send_(b));
     if (b.action === 'sent') return out_({ ok: true, items: sentStatus_() });
+    if (b.action === 'correspondence') return out_(correspondence_());
+    if (b.action === 'mail') return out_(mail_(b));
+    if (b.action === 'marks') return out_(marks_(b));
     if (b.action === 'notify') {
       if (b.to !== undefined) { var nt = [].concat(b.to).map(String).map(function (s) { return s.trim(); }).filter(emailOk_).slice(0, 3); PROPS.setProperty('notifyTo', nt.join(',')); }
       return out_({ ok: true, to: notifyTo_() });

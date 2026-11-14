@@ -116,12 +116,12 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     <header>
       <div class="eyebrow"><span class="light" aria-hidden="true"></span><span id="updated">Updated each morning</span></div>
       <h1>Rundown</h1>
-      <p class="sub">New roles each morning, each with an application email and a CV tailored to the job, plus speculative emails to send. Your Saved, Applied and Not for me marks are kept on this device.</p>
+      <p class="sub">New roles each morning, each with an application email and a CV tailored to the job, plus speculative emails to send. Your Saved, Applied and Not for me marks are kept for you on every device.</p>
     </header>
     <nav class="tabs" role="tablist" id="tabs">
       <button type="button" role="tab" data-tab="roles" aria-selected="true">Advertised roles</button>
       <button type="button" role="tab" data-tab="outreach" aria-selected="false">Speculative emails</button>
-      <button type="button" role="tab" data-tab="sent" aria-selected="false">Sent and replies</button>
+      <button type="button" role="tab" data-tab="sent" aria-selected="false">Correspondence</button>
       <button type="button" role="tab" data-tab="msgs" aria-selected="false">Website messages</button>
       <button type="button" role="tab" data-tab="site" aria-selected="false">My website</button>
       <button type="button" role="tab" data-tab="profiles" aria-selected="false">Public profiles</button>
@@ -152,12 +152,26 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
 
     <section id="outreachView" hidden class="controls">
       <p class="sub">Organisations where good roles are often filled without being advertised. Tap Send from here to check the email, choose a language and CV, and send it. Or copy it into your own inbox if you prefer.</p>
+      <div class="seg" id="oSeg">
+        <button type="button" data-o="new" aria-pressed="true">To look at</button>
+        <button type="button" data-o="saved" aria-pressed="false">Interested</button>
+        <button type="button" data-o="sent" aria-pressed="false">Email sent</button>
+        <button type="button" data-o="skip" aria-pressed="false">Not interested</button>
+        <button type="button" data-o="everything" aria-pressed="false">Everything</button>
+      </div>
       <div class="counts" id="ocounts"></div>
       <div id="olist" class="day"></div>
     </section>
 
     <section id="sentView" hidden class="controls">
-      <p class="sub">Everything you have sent from this page, and whether anyone has replied. Replies are checked each time you open this tab.</p>
+      <p class="sub">Every email sent from your application inbox, newest first, and every email that has come in. A star means someone you wrote to has replied, in any thread, from the same address or the same organisation. Checked each time you open this tab.</p>
+      <div class="seg" id="corrSeg">
+        <button type="button" data-c="sent" aria-pressed="true">Sent</button>
+        <button type="button" data-c="replies" aria-pressed="false">Replies</button>
+        <button type="button" data-c="other" aria-pressed="false">Other emails</button>
+        <button type="button" data-c="inbox" aria-pressed="false">Whole inbox</button>
+        <button type="button" data-c="muted" aria-pressed="false">Not interested</button>
+      </div>
       <div class="counts" id="sentCounts"></div>
       <div id="sentList" class="day"></div>
     </section>
@@ -259,7 +273,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   const KEY = 'rundown.pw', MARKS = 'rundown.marks';
   const CATNAME = {comms:'Comms and content', broadcast:'Broadcast and arts', devon:'Devon and flexible', london:'London, for reference'};
   let PAGEPW = '';
-  let DATA = null, marks = {}, cat = 'all', statusView = 'new', tab = 'roles';
+  let DATA = null, marks = {}, cat = 'all', statusView = 'new', tab = 'roles', CORR = null, corrP = null, marksAt = {}, oView = 'new', cView = 'sent';
 
   function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){ return null; } }
   try { marks = JSON.parse(ls(MARKS) || '{}') || {}; } catch(e){ marks = {}; }
@@ -313,12 +327,27 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   $('catSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cat = b.dataset.cat; document.querySelectorAll('#catSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
   $('statusSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; statusView = b.dataset.status; document.querySelectorAll('#statusSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
 
-  function statusOf(item, kind){ const m = marks[kind + ':' + item.id]; return m || item.status || 'new'; }
-  function setMark(item, kind, s, rerender){ const k = kind + ':' + item.id; marks[k] = statusOf(item, kind) === s ? 'new' : s; saveMarks(); rerender(); }
+  function statusOf(item, kind){ const m = marks[kind + ':' + item.id]; if (m && m !== 'new') return m; if (kind === 'out' && ownSent(item)) return 'sent'; return item.status || 'new'; }
+  // An email counts as this suggestion's own when the page recorded it, or it went to the same address with the same subject.
+  function isOwn(m, o){ if (m.ref) return m.ref.kind === 'out' && m.ref.id === o.id; const subj = str(m.subject).toLowerCase().replace(/^(re|fwd?):\s*/,''); return !!o.subject && subj === str(o.subject).toLowerCase() && addrs(m.to + ',' + m.cc).some(a => addrs(o.contact).includes(a)); }
+  function ownSent(o){ return CORR ? CORR.sent.find(m => isOwn(m, o)) : null; }
+  function pushMark(k, v){ marksAt[k] = Date.now(); if (api()) call({action:'marks', set:{[k]: v}}).catch(() => {}); }
+  function setMark(item, kind, s, rerender){ const k = kind + ':' + item.id; marks[k] = statusOf(item, kind) === s ? 'new' : s; saveMarks(); pushMark(k, marks[k]); rerender(); }
+  function markSent(kind, id){ const k = kind + ':' + id; marks[k] = kind === 'job' ? 'applied' : 'sent'; saveMarks(); pushMark(k, marks[k]); }
+  async function loadServerMarks(){
+    if (!api()) return;
+    try {
+      const r = await call({action:'marks'}); const srv = r.marks || {}; const up = {};
+      Object.keys(marks).forEach(k => { if (!srv[k] && marks[k] && marks[k] !== 'new') up[k] = marks[k]; });
+      Object.keys(srv).forEach(k => { marks[k] = srv[k].s; marksAt[k] = srv[k].t; });
+      saveMarks(); if (Object.keys(up).length) call({action:'marks', set: up}).catch(() => {});
+      renderRoles(); renderOutreach();
+    } catch(e){}
+  }
 
   function start(){
     if (DATA.generated) $('updated').textContent = 'Updated ' + new Date(DATA.generated).toLocaleString('en-GB',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
-    renderRoles(); renderOutreach(); renderAlerts(); renderCvs(); loadServerCv();
+    renderRoles(); renderOutreach(); renderAlerts(); renderCvs(); loadServerCv(); loadServerMarks();
   }
 
   /* ---------- roles ---------- */
@@ -375,7 +404,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       const sb = el('button','btn solid','Apply by email'); sb.type = 'button'; left.append(sb); let comp = null;
       sb.addEventListener('click', () => {
         if (comp){ comp.hidden = !comp.hidden; return; }
-        comp = composer({kind:'job', id:j.id, label: str(j.employer) + ', ' + str(j.title), to: j.applyEmail || '', subject: j.draft ? j.draft.subject : 'Application: ' + str(j.title), body: j.draft ? j.draft.email : '', cvKey: j.draft && j.draft.cv ? 'job:' + j.id : 'base', note: j.applyEmail ? '' : 'This advert may ask you to apply through a form. Only send by email if it gives an address.', onSent: () => { marks['job:' + j.id] = 'applied'; saveMarks(); }});
+        comp = composer({kind:'job', id:j.id, label: str(j.employer) + ', ' + str(j.title), to: j.applyEmail || '', subject: j.draft ? j.draft.subject : 'Application: ' + str(j.title), body: j.draft ? j.draft.email : '', cvKey: j.draft && j.draft.cv ? 'job:' + j.id : 'base', note: j.applyEmail ? '' : 'This advert may ask you to apply through a form. Only send by email if it gives an address.', onSent: () => { markSent('job', j.id); CORR = null; }});
         c.append(comp);
       });
     }
@@ -449,20 +478,61 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   }
 
   /* ---------- outreach ---------- */
+  $('oSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; oView = b.dataset.o; document.querySelectorAll('#oSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderOutreach(); });
+  const GENERIC = ['gmail.com','googlemail.com','hotmail.com','hotmail.co.uk','outlook.com','live.com','live.co.uk','yahoo.com','yahoo.co.uk','yahoo.fr','icloud.com','me.com','aol.com','btinternet.com','proton.me','protonmail.com','gmx.com','gmx.de','orange.fr','free.fr','wanadoo.fr','mail.ru','yandex.ru','yandex.com','web.de','sky.com','virginmedia.com'];
+  function addrs(s){ return (str(s).match(/[^\s<>"',;]+@[^\s<>"',;]+/g) || []).map(x => x.toLowerCase()); }
+  function dom(a){ const d = str(a).split('@')[1] || ''; return GENERIC.includes(d) ? '' : d; }
+  function host(u){ try { return new URL(u).hostname.replace(/^www\./,'').toLowerCase(); } catch(e){ return ''; } }
+  function normOrg(s){ return str(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\b(the|ltd|limited|inc|cic|plc|gmbh|sa|sarl)\b/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+  function sameDom(a, b){ return a && b && (a === b || a.endsWith('.' + b) || b.endsWith('.' + a)); }
+  function fmtDay(t){ return new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
+  function daysAgo(t){ const d = Math.floor((Date.now() - t) / 86400000); return d <= 0 ? 'today' : d === 1 ? '1 day ago' : d + ' days ago'; }
+  // Earlier contact with the same organisation: same address, same domain (email or website) or same name.
+  function priorContact(o){
+    const hits = [], a = addrs(o.contact), d = new Set([...a.map(dom), host(o.url)].filter(Boolean)), n = normOrg(o.org);
+    if (CORR) CORR.sent.forEach(m => {
+      if (isOwn(m, o)) return;
+      const ta = addrs(m.to + ',' + m.cc), byAddr = ta.some(x => a.includes(x)), byDom = ta.some(x => [...d].some(y => sameDom(dom(x), y))), byName = n && m.ref && normOrg(m.ref.label) === n;
+      if (byAddr || byDom || byName) hits.push({t: m.t, to: m.to, what: m.subject, how: byAddr ? 'same address' : byDom ? 'same organisation' : 'same name'});
+    });
+    arr(DATA.outreach).forEach(x => {
+      if (x.id === o.id || statusOf(x,'out') !== 'sent') return;
+      const xd = new Set([...addrs(x.contact).map(dom), host(x.url)].filter(Boolean));
+      if ((n && normOrg(x.org) === n) || [...xd].some(y => [...d].some(z => sameDom(y, z))) || addrs(x.contact).some(y => a.includes(y))) {
+        if (!hits.some(h => Math.abs(h.t - (marksAt['out:' + x.id] || 0)) < 600000)) hits.push({t: marksAt['out:' + x.id] || 0, to: x.contact, what: x.subject || x.org, how: 'marked sent'});
+      }
+    });
+    return hits.sort((p, q) => q.t - p.t);
+  }
+  function sentOn(o){
+    const m = ownSent(o); if (m) return m.t;
+    return marksAt['out:' + o.id] || 0;
+  }
   function renderOutreach(){
     const items = arr(DATA.outreach);
-    const sent = items.filter(o => statusOf(o,'out') === 'sent').length;
-    const todo = items.filter(o => statusOf(o,'out') === 'new').length;
-    $('ocounts').textContent = todo + ' ready to send · ' + sent + ' sent';
+    const by = k => items.filter(o => statusOf(o,'out') === k).length;
+    $('ocounts').textContent = by('new') + ' to look at · ' + by('saved') + ' interested · ' + by('sent') + ' sent · ' + by('skip') + ' not interested';
+    if (api() && !CORR) loadCorr().then(() => { if (tab === 'outreach') renderOutreach(); }).catch(() => {});
     const list = $('olist'); list.replaceChildren();
-    items.slice().sort((a,b) => { const ra = statusOf(a,'out') === 'new' ? 0 : 1, rb = statusOf(b,'out') === 'new' ? 0 : 1; return ra - rb || str(b.added).localeCompare(str(a.added)); }).forEach(o => {
+    const shown = items.filter(o => oView === 'everything' || statusOf(o,'out') === oView).sort((a,b) => str(b.added).localeCompare(str(a.added)));
+    if (!shown.length) list.append(el('p','status', oView === 'saved' ? 'Nothing marked Interested yet.' : oView === 'skip' ? 'Nothing marked Not interested.' : oView === 'sent' ? 'No speculative emails sent yet.' : 'Nothing here.'));
+    shown.forEach(o => {
       const s = statusOf(o,'out');
       const c = el('article','slot outreach' + (s === 'skip' ? ' pass' : ''));
       const top = el('div','top'); const head = el('div');
       head.append(el('div','cat', [o.country, o.added ? 'added ' + fmtDate(o.added) : ''].filter(Boolean).join(' · ')), el('h2',null,o.org || 'Organisation'));
       if (o.sector) head.append(el('div','emp',o.sector));
-      top.append(head, el('span','badge ' + (s === 'sent' ? 'applied' : s === 'skip' ? '' : 'new'), s === 'sent' ? 'Sent' : s === 'skip' ? 'Skipped' : 'To send'));
+      const st = sentOn(o);
+      top.append(head, el('span','badge ' + (s === 'sent' ? 'applied' : s === 'saved' ? 'new' : ''), s === 'sent' ? 'Email sent' + (st ? ' ' + fmtDay(st) : '') : s === 'saved' ? 'Interested' : s === 'skip' ? 'Not interested' : 'To look at'));
       c.append(top);
+      const prior = s === 'sent' ? [] : priorContact(o);
+      if (prior.length){
+        const w = el('div','mail'); w.style.borderColor = 'var(--onair)';
+        w.append(el('div','subj','Already contacted this organisation'));
+        prior.slice(0,3).forEach(h => w.append(el('div',null, (h.t ? fmtDay(h.t) + ', ' : '') + 'to ' + str(h.to) + ' (' + h.how + '): ' + str(h.what))));
+        w.append(el('div','status','Writing again so soon could look repetitive. Only send if this is for something clearly different.'));
+        c.append(w);
+      }
       if (o.why) c.append(el('p','why',o.why));
       if (o.contact){ const ad = el('div','addr'); ad.append(el('span','status','To:')); const code = el('code',null,o.contact); const cb = el('button','btn','Copy address'); cb.type='button'; cb.addEventListener('click', () => copy(o.contact, cb, code)); ad.append(code, cb); c.append(ad); }
       if (o.contactNote) c.append(el('p','status',o.contactNote));
@@ -473,16 +543,16 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       c.append(det);
       const row = el('div','row'); const left = el('div','acts');
       const href = safeUrl(o.url); if (href){ const a = el('a','open','Website'); a.href = href; a.target='_blank'; a.rel='noopener noreferrer'; left.append(a); }
-      if (api()){
+      if (api() && s !== 'sent'){
         const sb = el('button','btn solid','Send from here'); sb.type = 'button'; left.append(sb); let comp = null;
         sb.addEventListener('click', () => {
           if (comp){ comp.hidden = !comp.hidden; return; }
-          comp = composer({kind:'out', id:o.id, label: str(o.org), to: /@/.test(str(o.contact)) ? o.contact : '', subject: o.subject, body: o.email, cvKey:'base', lang: o.language, onSent: () => { marks['out:' + o.id] = 'sent'; saveMarks(); }});
+          comp = composer({kind:'out', id:o.id, label: str(o.org), to: /@/.test(str(o.contact)) ? o.contact : '', subject: o.subject, body: o.email, cvKey:'base', lang: o.language, note: prior.length ? 'You have already written to this organisation (see above).' : '', onSent: () => { markSent('out', o.id); CORR = null; renderOutreach(); }});
           c.append(comp);
         });
       }
       const acts = el('div','acts');
-      [['applied','sent','Sent'],['pass','skip','Skip']].forEach(([cls,k,l]) => { const b = el('button','act ' + cls, l); b.type='button'; b.setAttribute('aria-pressed', String(s === k)); b.addEventListener('click', () => setMark(o,'out',k,renderOutreach)); acts.append(b); });
+      [['saved','saved','Interested'],['applied','sent','Email sent'],['pass','skip','Not interested']].forEach(([cls,k,l]) => { const b = el('button','act ' + cls, l); b.type='button'; b.setAttribute('aria-pressed', String(s === k)); b.addEventListener('click', () => setMark(o,'out',k,renderOutreach)); acts.append(b); });
       row.append(left, acts); c.append(row);
       list.append(c);
     });
@@ -990,27 +1060,91 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     return p;
   }
 
+  function loadCorr(force){ if (force) { CORR = null; corrP = null; } if (!corrP) corrP = call({action:'correspondence'}).then(r => { CORR = { sent: arr(r.sent), inbox: arr(r.inbox), muted: arr(r.muted), account: r.account }; return CORR; }).catch(e => { corrP = null; throw e; }); return corrP; }
+  $('corrSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cView = b.dataset.c; document.querySelectorAll('#corrSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderCorr(); });
+  function gmailLink(thread){ return 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(CORR.account || '') + '#all/' + encodeURIComponent(thread); }
+  function isMuted(m){ return CORR.muted.includes(m.addr) || CORR.muted.includes(m.addr.split('@')[1] || ''); }
+  // What kind of email was this: from the page's own record, or by matching the address or subject to a job or speculative suggestion.
+  function kindOf(m){
+    if (m.ref) return m.ref.kind === 'out' ? ['Speculative', m.ref.label] : ['Advertised job', m.ref.label];
+    const ta = addrs(m.to + ',' + m.cc), subj = str(m.subject).toLowerCase().replace(/^(re|fwd?):\s*/,'');
+    const o = arr(DATA.outreach).find(x => addrs(x.contact).some(a => ta.includes(a)) || (x.subject && str(x.subject).toLowerCase() === subj));
+    if (o) return ['Speculative', o.org];
+    const j = arr(DATA.jobs).find(x => addrs(x.applyEmail).some(a => ta.includes(a)) || (x.draft && x.draft.subject && str(x.draft.subject).toLowerCase() === subj));
+    if (j) return ['Advertised job', str(j.employer) + ', ' + str(j.title)];
+    return ['Other', ''];
+  }
+  // Replies: anything in the inbox after the email went, from the same address or the same organisation's domain, in any thread.
+  function repliesTo(m){
+    const ta = addrs(m.to + ',' + m.cc), ds = ta.map(dom).filter(Boolean);
+    return CORR.inbox.filter(i => i.t > m.t && !isMuted(i) && (ta.includes(i.addr) || ds.some(d => sameDom(dom(i.addr), d))));
+  }
+  function linkedSent(i){ return CORR.sent.filter(m => m.t < i.t && (addrs(m.to + ',' + m.cc).includes(i.addr) || addrs(m.to + ',' + m.cc).map(dom).filter(Boolean).some(d => sameDom(dom(i.addr), d)))); }
   async function refreshSent(){
     const box = $('sentList');
     if (!api()){ box.replaceChildren(el('p','status','Sending is not switched on yet.')); return; }
-    box.replaceChildren(el('p','status','Checking for replies...'));
-    let res; try { res = await call({action:'sent'}); } catch(e){ box.replaceChildren(el('p','status','Could not load. Check your connection.')); return; }
-    const items = arr(res.items).slice().reverse();
-    const replied = items.filter(i => i.replies).length;
-    $('sentCounts').textContent = items.length + ' sent · ' + replied + ' with replies';
+    box.replaceChildren(el('p','status','Checking your application inbox...'));
+    try { await loadCorr(true); } catch(e){ box.replaceChildren(el('p','status','Could not load. Check your connection.')); return; }
+    renderCorr();
+  }
+  function inboxCard(i, box){
+    const linked = linkedSent(i), muted = isMuted(i);
+    const c = el('article','slot ' + (linked.length ? 'outreach' : 'london') + (muted ? ' pass' : ''));
+    const top = el('div','top'); const h = el('div');
+    h.append(el('div','cat', fmtDay(i.t) + ' · ' + daysAgo(i.t) + (i.unread ? ' · unread' : '')), el('h2',null, (linked.length && !i.auto ? '★ ' : '') + i.subject), el('div','emp','From ' + i.from));
+    top.append(h, el('span','badge ' + (linked.length && !i.auto ? 'new' : ''), i.auto ? 'Automatic reply' : linked.length ? 'Reply' : muted ? 'Not interested' : 'Not linked to anything you sent'));
+    c.append(top);
+    if (linked.length) c.append(el('p','status','About what you sent ' + fmtDay(linked[0].t) + ': ' + linked[0].subject));
+    c.append(el('div','mail', str(i.snippet) + (str(i.snippet).length >= 260 ? '...' : '')));
+    const r = el('div','acts'); const a = el('a','open','Open in Gmail'); a.href = gmailLink(i.thread); a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a);
+    const st = el('span','status');
+    if (!linked.length && !muted){
+      const sp = el('button','btn','This is spam'); sp.type = 'button';
+      sp.addEventListener('click', async () => { sp.disabled = true; st.textContent = 'Moving to spam...'; try { await call({action:'mail', op:'spam', thread:i.thread}); CORR.inbox = CORR.inbox.filter(x => x.thread !== i.thread); renderCorr(); } catch(e){ sp.disabled = false; st.textContent = 'Could not move it. Try again.'; } });
+      r.append(sp);
+    }
+    const who = i.addr, d = dom(i.addr);
+    if (!muted){
+      [[who, 'Not interested'], [d, d ? 'Not interested in anyone at ' + d : '']].forEach(([target, label]) => {
+        if (!target) return;
+        const ni = el('button','btn',label); ni.type = 'button';
+        ni.addEventListener('click', async () => { ni.disabled = true; try { const res = await call({action:'mail', op:'mute', who: target}); CORR.muted = arr(res.muted); renderCorr(); } catch(e){ ni.disabled = false; st.textContent = 'Could not save. Try again.'; } });
+        r.append(ni);
+      });
+    } else {
+      const un = el('button','btn','Undo not interested'); un.type = 'button';
+      un.addEventListener('click', async () => { const t = CORR.muted.includes(who) ? who : d; un.disabled = true; try { const res = await call({action:'mail', op:'unmute', who: t}); CORR.muted = arr(res.muted); renderCorr(); } catch(e){ un.disabled = false; } });
+      r.append(un);
+    }
+    r.append(st); c.append(r); box.append(c);
+  }
+  function renderCorr(){
+    const box = $('sentList'); if (!CORR){ refreshSent(); return; }
     box.replaceChildren();
-    if (!items.length){ box.append(el('p','status','Nothing sent from this page yet.')); return; }
-    items.forEach(it => {
-      const c = el('article','slot ' + (it.ref && it.ref.kind === 'out' ? 'outreach' : 'comms'));
-      const top = el('div','top'); const h = el('div');
-      h.append(el('div','cat', (it.ref && it.ref.kind === 'out' ? 'Speculative' : 'Application') + ' · ' + new Date(it.t).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})), el('h2',null, (it.ref && it.ref.label) || it.subject), el('div','emp','To ' + it.to));
-      top.append(h, el('span','badge ' + (it.replies ? 'new' : ''), it.replies ? (it.replies === 1 ? 'Reply' : it.replies + ' replies') : 'Awaiting reply'));
-      c.append(top);
-      const meta = el('div','meta'); meta.append(el('span',null,'From ' + it.from), el('span',null,it.subject)); c.append(meta);
-      if (it.replies){ const m = el('div','mail'); m.append(el('div','subj', str(it.lastFrom) + ', ' + new Date(it.lastReply).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})), document.createTextNode(str(it.snippet) + (str(it.snippet).length >= 220 ? '...' : ''))); c.append(m); }
-      if (it.thread){ const a = el('a','open','Open in Gmail'); a.href = 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(it.account || it.from) + '#all/' + encodeURIComponent(it.thread); a.target = '_blank'; a.rel = 'noopener noreferrer'; const rw = el('div','acts'); rw.append(a); c.append(rw); }
-      box.append(c);
-    });
+    const live = CORR.inbox.filter(i => !isMuted(i));
+    const replies = live.filter(i => linkedSent(i).length), other = live.filter(i => !linkedSent(i).length && !i.auto);
+    const withReply = CORR.sent.filter(m => repliesTo(m).some(i => !i.auto)).length;
+    $('sentCounts').textContent = CORR.sent.length + ' sent · ' + withReply + ' with replies · ' + other.length + ' other emails · ' + (CORR.inbox.length - live.length) + ' not interested';
+    if (cView === 'sent'){
+      if (!CORR.sent.length){ box.append(el('p','status','Nothing sent from the application inbox yet.')); return; }
+      CORR.sent.forEach(m => {
+        const [kind, label] = kindOf(m), rs = repliesTo(m), real = rs.filter(i => !i.auto), latest = rs[rs.length - 1] && rs.slice().sort((p,q) => q.t - p.t)[0];
+        const c = el('article','slot ' + (kind === 'Speculative' ? 'outreach' : kind === 'Advertised job' ? 'comms' : 'london'));
+        const top = el('div','top'); const h = el('div');
+        h.append(el('div','cat', kind + ' · sent ' + fmtDay(m.t) + ' · ' + daysAgo(m.t)), el('h2',null, (real.length ? '★ ' : '') + (label || m.subject)), el('div','emp','To ' + m.to));
+        top.append(h, el('span','badge ' + (real.length ? 'new' : ''), real.length ? 'Replied ' + daysAgo(real.sort((p,q) => q.t - p.t)[0].t) : rs.length ? 'Automatic reply only' : 'No reply yet'));
+        c.append(top);
+        const meta = el('div','meta'); meta.append(el('span',null,m.subject)); c.append(meta);
+        if (latest){ const mm = el('div','mail'); mm.append(el('div','subj', (latest.auto ? 'Automatic reply from ' : 'Reply from ') + latest.from + ', ' + fmtDay(latest.t) + ' (' + daysAgo(latest.t) + ')'), document.createTextNode(str(latest.snippet))); c.append(mm); }
+        const r = el('div','acts'); const a = el('a','open','Open in Gmail'); a.href = gmailLink(latest ? latest.thread : m.thread); a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a); c.append(r);
+        box.append(c);
+      });
+      return;
+    }
+    const list = cView === 'replies' ? replies : cView === 'other' ? other : cView === 'muted' ? CORR.inbox.filter(isMuted) : CORR.inbox;
+    if (!list.length){ box.append(el('p','status', cView === 'replies' ? 'No replies yet.' : cView === 'other' ? 'Nothing to sort.' : cView === 'muted' ? 'Nothing marked Not interested.' : 'The inbox is empty.')); return; }
+    if (cView === 'other') box.append(el('p','status','Emails that do not seem to come from anyone you wrote to. Mark spam to send them to the Gmail spam folder, or Not interested to stop them being highlighted.'));
+    list.forEach(i => inboxCard(i, box));
   }
 
   /* ---------- alerts ---------- */
