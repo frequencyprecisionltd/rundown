@@ -52,6 +52,7 @@ h1{font:700 clamp(28px,7vw,40px)/1.05 var(--display);margin:4px 0 0;letter-spaci
 @media (prefers-color-scheme: dark){.viz{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--w1:#3987e5;--w2:#199e70;--w3:#c98500;--w4:#d55181;--w5:#9085e9;--w6:#d95926;--grid:#2b2f40;--axis:#a2a7ba}}
 .exitbtn{position:absolute;top:0;right:0}
 @media (max-width:560px){.exitbtn{position:static;display:block;margin:0 0 10px auto}}
+.slot p,.slot .mail,.slot code,.slot .why{overflow-wrap:anywhere}
 .tgh{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 6px}
 .tilesrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -210,8 +211,16 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         <button type="button" data-o="skip" aria-pressed="false">Not interested</button>
         <button type="button" data-o="everything" aria-pressed="false">Everything</button>
       </div>
+      <div class="seg" id="oGroup" aria-label="Group the list">
+        <button type="button" data-g="date" aria-pressed="true">Newest first</button>
+        <button type="button" data-g="place" aria-pressed="false">Place</button>
+        <button type="button" data-g="work" aria-pressed="false">Way of working</button>
+        <button type="button" data-g="hours" aria-pressed="false">Full or part time</button>
+        <button type="button" data-g="role" aria-pressed="false">Type of role</button>
+        <button type="button" data-g="lang" aria-pressed="false">Language</button>
+      </div>
       <div class="counts" id="ocounts"></div>
-      <div id="olist" class="day"></div>
+      <div id="olist"></div>
     </section>
 
     <section id="sentView" hidden class="controls">
@@ -850,9 +859,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     $('ocounts').textContent = by('new') + ' to look at · ' + by('saved') + ' interested · ' + by('sent') + ' sent · ' + by('skip') + ' not interested';
     if (api() && !CORR) loadCorr().then(() => { if (tab === 'outreach') renderOutreach(); }).catch(() => {});
     const list = $('olist'); list.replaceChildren();
-    const shown = items.filter(o => oView === 'everything' || statusOf(o,'out') === oView).sort((a,b) => str(b.added).localeCompare(str(a.added)));
+    const shown = items.filter(o => oView === 'everything' || statusOf(o,'out') === oView).sort((a,b) => str(b.added).localeCompare(str(a.added)) || items.indexOf(b) - items.indexOf(a));
     if (!shown.length) list.append(el('p','status', oView === 'saved' ? 'Nothing marked Interested yet.' : oView === 'skip' ? 'Nothing marked Not interested.' : oView === 'sent' ? 'No speculative emails sent yet.' : 'Nothing here.'));
-    shown.forEach(o => {
+    const outCard = o => {
       const s = statusOf(o,'out');
       const c = el('article','slot outreach' + (s === 'skip' ? ' pass' : ''));
       const top = el('div','top'); const head = el('div');
@@ -861,6 +870,14 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       const st = sentOn(o);
       top.append(head, el('span','badge ' + (s === 'sent' ? 'applied' : s === 'saved' ? 'new' : ''), s === 'sent' ? 'Email sent' + (st ? ' ' + fmtDay(st) : '') : s === 'saved' ? 'Interested' : s === 'skip' ? 'Not interested' : 'To look at'));
       c.append(top);
+      const gg = outGroups(o), tags = el('div'); tags.style.margin = '2px 0 4px';
+      const rep1 = outReplied(o);
+      if (rep1) tags.append(el('span','wtag ideal', (rep1.auto ? 'Automatic reply ' : '★ Replied ') + daysAgo(rep1.t)));
+      if (outSeen(o)) tags.append(el('span','wtag','👁 Read'));
+      if (!st && s !== 'sent' && CORR && outReplied(o) === null && CORR.sent.some(m => addrs(m.to).some(a => addrs(o.contact).includes(a)))) tags.append(el('span','wtag','✉ Emailed'));
+      [gg.work, gg.hours, gg.role].forEach(t => tags.append(el('span','wtag', t)));
+      if (gg.place === 'Warm island or sunny coast') tags.append(el('span','wtag ideal','☀ ' + gg.place));
+      c.append(tags);
       const prior = s === 'sent' ? [] : priorContact(o);
       if (prior.length){
         const w = el('div','mail'); w.style.borderColor = 'var(--onair)';
@@ -875,6 +892,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       if (o.contact){ const ad = el('div','addr'); ad.append(el('span','status','To:')); const code = el('code',null,o.contact); const cb = el('button','btn','Copy address'); cb.type='button'; cb.addEventListener('click', () => copy(o.contact, cb, code)); ad.append(code, cb); c.append(ad); }
       if (o.contactNote) c.append(el('p','status',o.contactNote));
       const det = el('details'); det.append(el('summary',null,'Show email'));
+      det.addEventListener('toggle', () => { if (det.open && !outSeen(o)){ outSeen(o, true); } });
       const mail = el('div','mail'); if (o.subject) mail.append(el('div','subj','Subject: ' + o.subject)); mail.append(document.createTextNode(str(o.email))); det.append(mail);
       const r = el('div','acts'); r.style.marginTop = '8px'; const cs = el('button','btn','Copy subject'), ce = el('button','btn','Copy email'); cs.type = ce.type = 'button';
       cs.addEventListener('click', () => copy(o.subject, cs, mail)); ce.addEventListener('click', () => copy(o.email, ce, mail)); r.append(cs, ce); det.append(r);
@@ -893,8 +911,53 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       const acts = el('div','acts');
       [['saved','saved','Interested'],['applied','sent','Email sent'],['pass','skip','Not interested']].forEach(([cls,k,l]) => { const b = el('button','act ' + cls, l); b.type='button'; b.setAttribute('aria-pressed', String(s === k)); b.addEventListener('click', () => setMark(o,'out',k,renderOutreach)); acts.append(b); });
       row.append(left, acts); c.append(row);
-      list.append(c);
+      return c;
+    };
+    const groups = new Map();
+    shown.forEach(o => { const k = oGroup === 'date' ? str(o.added) || 'Earlier' : outGroups(o)[oGroup]; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); });
+    let keys = [...groups.keys()];
+    if (oGroup !== 'date'){ const order = OUT_ORDER[oGroup] || []; keys.sort((a, b) => ((order.indexOf(a) + 1) || 99) - ((order.indexOf(b) + 1) || 99) || a.localeCompare(b)); }
+    keys.forEach(k => {
+      const its = groups.get(k), sec = el('section','day'), dh = el('div','dayhead');
+      dh.append(el('span',null, oGroup === 'date' ? (k === 'Earlier' ? 'Earlier' : 'Added ' + fmtDate(k)) : k), el('span',null, its.length + (its.length === 1 ? ' organisation' : ' organisations')));
+      sec.append(dh); its.forEach(o => sec.append(outCard(o))); list.append(sec);
     });
+  }
+  /* grouping and read or replied markers for speculative emails */
+  let oGroup = 'date';
+  try { oGroup = localStorage.getItem('rundown.oGroup') || 'date'; } catch(e){}
+  document.querySelectorAll('#oGroup button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.g === oGroup)));
+  $('oGroup').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; oGroup = b.dataset.g; try { localStorage.setItem('rundown.oGroup', oGroup); } catch(x){} document.querySelectorAll('#oGroup button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderOutreach(); });
+  const OUT_ORDER = {
+    place: ['Warm island or sunny coast', 'Devon and the South West', 'Rest of the UK', 'Europe', 'Middle East and Africa', 'Elsewhere'],
+    work: ['Fully remote', 'Remote with visits (monthly or a few times a year)', 'Nearby: could go in weekly', 'Relocate for a good contract'],
+    hours: ['Part time or freelance (2 to 3 days)', 'Full or part time', 'Full time (worth relocating for)'],
+    role: ['Presenting and newsreading', 'Editorial and content producing', 'Arts, museums and audio guides', 'Research and policy', 'Communications'],
+    lang: ['English', 'French', 'Other languages']};
+  const NEAR_RE = /devon|cornwall|exeter|plymouth|torbay|totnes|dartington|newton abbot|bristol|bath|dorset|somerset|south west/i;
+  function outGroups(o){
+    const place = str(o.country), text = str(o.sector) + ' ' + str(o.why) + ' ' + str(o.org);
+    const sunny = SUNNY_RE.test(place), near = NEAR_RE.test(place), uk = /united kingdom|\buk\b|england|scotland|wales|london|isle of man/i.test(place) || near;
+    const eu = /france|spain|portugal|italy|greece|malta|cyprus|germany|netherlands|belgium|switzerland|ireland|monaco|austria|europe/i.test(place);
+    const mea = /morocco|tunisia|algeria|egypt|senegal|c[ôo]te d'ivoire|kenya|south africa|nigeria|ghana|united arab emirates|uae|dubai|abu dhabi|sharjah|qatar|doha|oman|bahrain|saudi|jordan|lebanon|israel/i.test(place);
+    const g = {};
+    g.place = sunny ? 'Warm island or sunny coast' : near ? 'Devon and the South West' : uk ? 'Rest of the UK' : eu ? 'Europe' : mea ? 'Middle East and Africa' : 'Elsewhere';
+    g.work = o.workMode || (/fully remote|work (fully )?remotely|from anywhere/i.test(text) && !sunny ? 'Fully remote' : near ? 'Nearby: could go in weekly' : /remote|online|digital|podcast|freelance|commission|international|worldwide/i.test(text) && !sunny ? (uk ? 'Remote with visits (monthly or a few times a year)' : 'Fully remote') : sunny || !uk ? 'Relocate for a good contract' : 'Remote with visits (monthly or a few times a year)');
+    g.hours = o.hoursAsk || (g.work === 'Relocate for a good contract' ? 'Full time (worth relocating for)' : 'Part time or freelance (2 to 3 days)');
+    const sec = str(o.sector);
+    g.role = o.roleType || (/(radio|tv|television) (station|channel|network)|commercial radio|public radio|community radio|broadcaster|news service|newsread|presenter|\bstation\b/i.test(sec) ? 'Presenting and newsreading'
+      : /audio guide|museum|gallery|exhibition|festival|opera|arts? (centre|district|foundation|charity|council)|heritage|cultur/i.test(text) ? 'Arts, museums and audio guides'
+      : /think tank|research|policy|institute|university|journal|academ/i.test(text) ? 'Research and policy'
+      : /news|newspaper|magazine|podcast|publish|media|editorial|documentar|production/i.test(text) ? 'Editorial and content producing' : 'Communications');
+    g.lang = /^fr/i.test(str(o.language)) ? 'French' : /^(en)?$/i.test(str(o.language)) ? 'English' : 'Other languages';
+    return g;
+  }
+  function outSeen(o, set){ const k = 'rundown.seen.out:' + o.id; try { if (set) localStorage.setItem(k, String(Date.now())); return !!localStorage.getItem(k); } catch(e){ return false; } }
+  function outReplied(o){
+    if (!CORR) return null; const to = addrs(o.contact), d = to.length ? dom(to[0]) : '';
+    const sent = CORR.sent.filter(m => addrs(m.to + ',' + m.cc).some(a => to.includes(a) || (d && dom(a) === d))); if (!sent.length) return null;
+    const first = Math.min(...sent.map(m => m.t));
+    return CORR.inbox.filter(i => i.t > first && !bounceOf(i) && (to.includes(i.addr) || (d && dom(i.addr) === d))).sort((a, b) => b.t - a.t)[0] || null;
   }
 
   /* ---------- My CVs and share codes ---------- */
