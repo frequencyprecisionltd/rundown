@@ -29,6 +29,8 @@
  *   {action:"mail", token, op:"read"|"spam"|"mute"|"unmute", thread?, who?}  read a thread's full text, move a thread to spam, or mute/unmute a sender or domain
  *   {action:"forms", token, op?:"add"|"status"|"remove", key?, item?, status?, note?}  application forms queued for Claude to fill in
  *   {action:"marks", token, set?}                       Interested / Applied / Sent / Not interested marks shared across devices
+ *   {action:"backups", token, op?:"now"}           daily backups in her Google Drive (code zip from GitHub + service data); dailyBackup() runs each night after setupAlerts()
+ *   {action:"linkcheck", token, items:[{url,title}]}  is each job advert still there? (gone, redirected elsewhere, or says it has closed)
  *   {action:"notify", token, to?}                      where activity alerts go (her personal inbox); activityCheck() runs hourly after setupAlerts()
  *   {action:"contact", name, email, message}            PUBLIC: the website contact form (no token)
  *
@@ -191,7 +193,7 @@ function forms_(b) {
     var it = b.item, url = String(it.url || '');
     if (!/^https:\/\/[^\s"'<>]+$/.test(url)) return { ok: false, error: 'Please paste the full web address of the form, starting https://' };
     list = list.filter(function (x) { return x.key !== key; });
-    list.push({ key: key, kind: String(it.kind || '').slice(0, 10), id: String(it.id || '').slice(0, 120), label: String(it.label || '').slice(0, 200), url: url.slice(0, 1000), note: String(it.note || '').slice(0, 1000), status: 'waiting', t: Date.now() });
+    list.push({ key: key, kind: String(it.kind || '').slice(0, 10), id: String(it.id || '').slice(0, 120), label: String(it.label || '').slice(0, 200), url: url.slice(0, 1000), advert: /^https?:\/\//.test(String(it.advert || '')) ? String(it.advert).slice(0, 1000) : '', note: String(it.note || '').slice(0, 1000), status: 'waiting', t: Date.now() });
   }
   if (b.op === 'status' && key) list.forEach(function (x) { if (x.key === key) { x.status = String(b.status || 'waiting').slice(0, 20); x.claudeNote = String(b.note || '').slice(0, 1000); x.t2 = Date.now(); } });
   if (b.op === 'remove' && key) list = list.filter(function (x) { return x.key !== key; });
@@ -210,8 +212,77 @@ function marks_(b) {
 
 /* ---------- activity alerts to her personal inbox ---------- */
 // The address lives only in Script Properties (key "notifyTo"), set from the private page or the editor's Project Settings.
-var PAGE_URL = 'https://frequencyprecisionltd.github.io/rundown/';
-var REPO_COMMITS = 'https://api.github.com/repos/frequencyprecisionltd/rundown/commits?path=data.enc.json&per_page=20&since=';
+// Where the board lives. If it moves (new GitHub account or another host), set the Script Properties
+// "pageUrl" (the board's address) and "repo" (owner/name on GitHub); no code change is needed.
+var PAGE_URL = PROPS.getProperty('pageUrl') || 'https://frequencyprecisionltd.github.io/rundown/';
+var REPO = PROPS.getProperty('repo') || 'frequencyprecisionltd/rundown';
+var REPO_COMMITS = 'https://api.github.com/repos/' + REPO + '/commits?path=data.enc.json&per_page=20&since=';
+
+/* ---------- is a job advert still there? ---------- */
+var CLOSED_RE = /no longer (available|accepting|open|active|live)|has (now )?(expired|closed)|this (job|vacancy|position|role|advert) (has|is) (now )?(closed|expired|been filled|no longer)|position (has been|is) filled|job not found|vacancy not found|page not found|could not be found|cannot be found|n'est plus (disponible|en ligne)|offre (expirée|pourvue|n'existe plus)|annonce (expirée|n'est plus)/i;
+function linkOne_(url, title) {
+  var cache = CacheService.getScriptCache(), ck = 'lc:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, url));
+  var hit = cache.get(ck); if (hit) return JSON.parse(hit);
+  var r = { url: url, state: 'ok', reason: '' };
+  try {
+    var cur = url, code = 0, res, hops = 0;
+    while (hops < 5) {
+      res = UrlFetchApp.fetch(cur, { muteHttpExceptions: true, followRedirects: false, headers: { 'User-Agent': 'Mozilla/5.0 (job board link check)' } });
+      code = res.getResponseCode();
+      if (code >= 300 && code < 400) { var loc = res.getHeaders()['Location'] || res.getHeaders()['location']; if (!loc) break; cur = loc.indexOf('http') === 0 ? loc : cur.replace(/^(https?:\/\/[^\/]+).*$/, '$1') + (loc.charAt(0) === '/' ? '' : '/') + loc; hops++; continue; }
+      break;
+    }
+    r.code = code; r.finalUrl = cur;
+    var path = function (u) { return String(u).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/$/, ''); };
+    var host = function (u) { return (String(u).match(/^https?:\/\/([^\/]+)/) || [])[1] || ''; };
+    var text = code === 200 ? res.getContentText().slice(0, 400000) : '';
+    var words = String(title || '').toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter(function (w) { return w.length > 3; });
+    var found = words.filter(function (w) { return text.toLowerCase().indexOf(w) >= 0; }).length;
+    if (code === 404 || code === 410) { r.state = 'gone'; r.reason = 'The advert page no longer exists (error ' + code + ').'; }
+    else if (code >= 400 && code !== 403 && code !== 429) { r.state = 'unsure'; r.reason = 'The advert site answered with error ' + code + '.'; }
+    else if (hops && (host(cur) !== host(url) || path(cur).length < path(url).length * 0.6)) { r.state = 'gone'; r.reason = 'The advert now redirects somewhere else (' + cur.slice(0, 120) + '), so it has probably been taken down.'; }
+    else if (text && CLOSED_RE.test(text)) { r.state = 'gone'; r.reason = 'The advert page says it has closed or is no longer available.'; }
+    else if (text && words.length >= 2 && found === 0) { r.state = 'unsure'; r.reason = 'The page no longer mentions this job title, so it may have been replaced by another job.'; }
+  } catch (e) { r.state = 'unsure'; r.reason = 'The advert site could not be reached just now.'; }
+  cache.put(ck, JSON.stringify(r), 6 * 3600);
+  return r;
+}
+function linkcheck_(b) {
+  var items = (b.items || []).slice(0, 25).filter(function (i) { return /^https?:\/\//.test(String(i.url || '')); });
+  return { ok: true, items: items.map(function (i) { return linkOne_(String(i.url), String(i.title || '')); }) };
+}
+
+/* ---------- backups in her Google Drive ---------- */
+// Each night: a zip of the whole board (code plus encrypted data, straight from GitHub) and a file of everything this
+// service keeps (marks, forms, CV versions, messages, settings). Kept in the Drive folder "Job board backups", newest 30 of each.
+// If GitHub is ever lost, the newest zip is all that is needed to set the board up again (see the Handover notes).
+var BACKUP_FOLDER = 'Job board backups';
+function backupFolder_() { var it = DriveApp.getFoldersByName(BACKUP_FOLDER); return it.hasNext() ? it.next() : DriveApp.createFolder(BACKUP_FOLDER); }
+function dailyBackup() {
+  var f = backupFolder_(), stamp = Utilities.formatDate(new Date(), 'Europe/London', 'yyyy-MM-dd'), notes = [];
+  try {
+    var res = UrlFetchApp.fetch('https://codeload.github.com/' + REPO + '/zip/refs/heads/main', { muteHttpExceptions: true });
+    if (res.getResponseCode() === 200) { var z = res.getBlob().setName('board-code-and-data-' + stamp + '.zip'); var old = f.getFilesByName(z.getName()); while (old.hasNext()) old.next().setTrashed(true); f.createFile(z); notes.push('zip'); }
+    else notes.push('GitHub answered ' + res.getResponseCode() + ', older zips kept');
+  } catch (e) { notes.push('GitHub not reachable, older zips kept'); }
+  var all = PROPS.getProperties(); delete all.TOKEN;
+  var name = 'service-data-' + stamp + '.json', o2 = f.getFilesByName(name); while (o2.hasNext()) o2.next().setTrashed(true);
+  f.createFile(name, JSON.stringify(all), 'application/json'); notes.push('service data');
+  ['board-code-and-data-', 'service-data-'].forEach(function (pre) {
+    var list = [], it = f.getFiles(); while (it.hasNext()) { var x = it.next(); if (x.getName().indexOf(pre) === 0) list.push(x); }
+    list.sort(function (a, b) { return b.getName() < a.getName() ? -1 : 1; }).slice(30).forEach(function (x) { x.setTrashed(true); });
+  });
+  PROPS.setProperty('backupLast', JSON.stringify({ t: Date.now(), notes: notes }));
+  return notes.join(', ');
+}
+function backups_(b) {
+  var note = null; if (b.op === 'now') note = dailyBackup();
+  var f = backupFolder_(), items = [], it = f.getFiles();
+  while (it.hasNext()) { var x = it.next(); items.push({ name: x.getName(), url: x.getUrl(), size: x.getSize(), t: x.getDateCreated().getTime() }); }
+  items.sort(function (a, c) { return c.t - a.t; });
+  var last; try { last = JSON.parse(PROPS.getProperty('backupLast') || 'null'); } catch (e) { last = null; }
+  return { ok: true, folder: f.getUrl(), items: items.slice(0, 20), last: last, note: note, repo: REPO, page: PAGE_URL };
+}
 function notifyTo_() { return String(PROPS.getProperty('notifyTo') || '').split(',').map(function (s) { return s.trim(); }).filter(emailOk_); }
 function esc_(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 // Runs on a timer (see setupAlerts). Emails only when there is something new since the last check.
@@ -269,6 +340,9 @@ function activityCheck() {
 function setupAlerts() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'activityCheck') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('activityCheck').timeBased().everyHours(1).create();
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'dailyBackup') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('dailyBackup').timeBased().everyDays(1).atHour(4).inTimezone('Europe/London').create();
+  try { dailyBackup(); } catch (e) { Logger.log('Backup could not run yet: ' + e); }
   if (!PROPS.getProperty('alertLast')) PROPS.setProperty('alertLast', String(Date.now()));
   Logger.log('Alerts on. Sending to: ' + (notifyTo_().join(', ') || '(no address yet: set notifyTo in Project Settings > Script Properties)'));
 }
@@ -380,6 +454,8 @@ function doPost(e) {
     if (b.action === 'mail') return out_(mail_(b));
     if (b.action === 'marks') return out_(marks_(b));
     if (b.action === 'forms') return out_(forms_(b));
+    if (b.action === 'backups') return out_(backups_(b));
+    if (b.action === 'linkcheck') return out_(linkcheck_(b));
     if (b.action === 'notify') {
       if (b.to !== undefined) { var nt = [].concat(b.to).map(String).map(function (s) { return s.trim(); }).filter(emailOk_).slice(0, 3); PROPS.setProperty('notifyTo', nt.join(',')); }
       return out_({ ok: true, to: notifyTo_() });

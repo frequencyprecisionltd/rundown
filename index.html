@@ -50,6 +50,8 @@ h1{font:700 clamp(28px,7vw,40px)/1.05 var(--display);margin:4px 0 0;letter-spaci
 @media (prefers-color-scheme: dark){:root{--w1:#3987e5;--w2:#199e70;--w3:#c98500;--w4:#d55181;--w5:#9085e9;--w6:#d95926}}
 .viz{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--w1:#2a78d6;--w2:#1baf7a;--w3:#eda100;--w4:#e87ba4;--w5:#6250d6;--w6:#eb6834;--grid:#e6e8ee;--axis:#5b6074}
 @media (prefers-color-scheme: dark){.viz{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--w1:#3987e5;--w2:#199e70;--w3:#c98500;--w4:#d55181;--w5:#9085e9;--w6:#d95926;--grid:#2b2f40;--axis:#a2a7ba}}
+.exitbtn{position:absolute;top:0;right:0}
+@media (max-width:560px){.exitbtn{position:static;display:block;margin:0 0 10px auto}}
 .tgh{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 6px}
 .tilesrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -146,10 +148,12 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     <label class="chk"><input type="checkbox" id="remember" checked> Remember on this device</label>
     <button class="btn solid" type="submit" id="unlock">Open</button>
     <p class="err" id="err" aria-live="polite"></p>
+    <a class="foot" id="backSite" hidden>← Back to the website</a>
   </form>
 
   <div id="app" hidden>
-    <header>
+    <header style="position:relative">
+      <button type="button" class="btn exitbtn" id="exitBtn" title="Go to your public website. Press Login there to come back.">Exit to my website ↗</button>
       <div class="eyebrow"><span class="light" aria-hidden="true"></span><span id="updated">Updated each morning</span></div>
       <h1>Rundown</h1>
       <p class="sub">New roles each morning, each with an application email and a CV tailored to the job, plus speculative emails to send. Your Saved, Applied and Not for me marks are kept for you on every device.</p>
@@ -254,8 +258,8 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         </ul>
       </div>
       <h2 style="margin-top:6px">Preview</h2>
-      <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff"><iframe id="sitePreview" title="Preview of your public website" style="width:100%;height:640px;border:0;display:block" loading="lazy"></iframe></div>
-      <p class="status">If the preview stays blank, use the Open button above.</p>
+      <a id="sitePrevLink" target="_blank" rel="noopener" style="display:block;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;min-height:200px"><img id="sitePreview" alt="Picture of your public website as visitors see it" style="width:100%;display:block"></a>
+      <div class="acts"><button type="button" class="btn" id="sitePrevRefresh">Refresh the picture</button><span class="status" id="sitePrevSt">A picture of the front page as visitors see it. Click it to open the live site. After you publish a change, the picture can take a few minutes to catch up.</span></div>
 
       <h2 style="margin-top:14px">My CV</h2>
       <p class="sub">This is your general CV: the one people can download from your website, and the starting point for every application. Change anything and press Save. Every earlier version is kept below with its date, so you can always go back.</p>
@@ -298,6 +302,12 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <p class="sub">Everything another AI assistant would need to keep this page, your website and your CVs running if Claude is ever not available: what each part is, where it lives, the passwords and keys, and how the daily search works, followed by your general CV. Copy it and paste it into the new assistant as your first message. Keep it private: it contains the keys to everything.</p>
       <p class="sub">The full backup is one zip file with the latest code for this page, your Google service and your website boxes, taken straight from GitHub, plus all your current data unencrypted and these notes. Save it somewhere safe, such as your Google Drive, so a web developer or another assistant can rebuild everything even if GitHub or Claude disappear. Make a fresh one now and then.</p>
       <div class="acts"><button type="button" class="btn solid" id="hoCopy">Copy handover</button><button type="button" class="btn" id="hoDl">Download as a file</button><button type="button" class="btn" id="hoZip">Download full backup (.zip)</button><button type="button" class="btn" id="hoPrompt">Copy the prompt for a new agent</button><span class="status" id="hoSt"></span></div>
+      <div class="slot" style="padding:14px">
+        <h2 style="margin:0 0 4px">🛟 Backups in your Google Drive</h2>
+        <p class="sub" style="margin:0 0 8px">Every night your Google service saves a zip of this whole page (code and data) and a file of everything it keeps, in the folder "Job board backups" in the Drive of your website Google account. If GitHub is ever lost, the newest zip plus the prompt below is all a new agent needs to set everything up again in a new free GitHub account.</p>
+        <ul id="bkList" style="margin:0 0 8px;padding-left:18px"></ul>
+        <div class="acts"><button type="button" class="btn" id="bkNow">Make a backup now</button><a class="btn" id="bkFolder" target="_blank" rel="noopener" hidden>Open the backups folder</a><span class="status" id="bkSt"></span></div>
+      </div>
       <div class="mail" id="hoText" style="max-height:480px;overflow:auto;font-size:13px"></div>
       <h2 style="margin-top:10px">Password notes</h2>
       <p class="sub">Somewhere safe to keep logins for your Google account, Squarespace and anything else. They are locked with this page's password inside your browser before they are saved, so nobody without the page password can read them, not even the services that store them. If you ever change the page password, open this first and save it again afterwards.</p>
@@ -352,7 +362,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <div class="alerts" id="alerts"></div>
     </section>
 
-    <p class="foot">Kept up to date automatically each morning. <button type="button" class="act" id="lockBtn">Lock this device</button></p>
+    <p class="foot">Kept up to date automatically each morning. <button type="button" class="act" id="lockBtn" title="Forget the password on this device and go to your public website">Lock this device and leave</button></p>
   </div>
 </div>
 
@@ -399,12 +409,16 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     try { DATA = await decrypt(blob, pw); }
     catch(e){ $('err').textContent = 'That password did not work. Try again.'; return false; }
     PAGEPW = pw; if (remember) ls(KEY, pw);
-    $('lock').hidden = true; $('app').hidden = false;
+    $('lock').hidden = true; $('app').hidden = false; if (DATA.publicSite) ls(SITE_KEY, DATA.publicSite);
     start(); recordOpening(typed); return true;
   }
   $('lock').addEventListener('submit', async e => { e.preventDefault(); $('unlock').disabled = true; await unlock($('pw').value, $('remember').checked, true); $('unlock').disabled = false; });
   $('showpw').addEventListener('change', e => { $('pw').type = e.target.checked ? 'text' : 'password'; });
-  $('lockBtn').addEventListener('click', () => { ls(KEY, null); location.reload(); });
+  const SITE_KEY = 'rundown-site';
+  function toSite(){ const u = str(DATA.publicSite) || ls(SITE_KEY); if (u) location.href = u; else location.reload(); }
+  $('lockBtn').addEventListener('click', () => { ls(KEY, null); toSite(); });
+  $('exitBtn').addEventListener('click', toSite);
+  { const u = ls(SITE_KEY); if (u){ $('backSite').href = u; $('backSite').hidden = false; } }
   const saved = ls(KEY); if (saved) unlock(saved, true);
 
   /* ---------- tabs and filters ---------- */
@@ -462,6 +476,26 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       dh.append(el('span',null,'Added ' + fmtDate(k)), el('span',null, items.length + (items.length === 1 ? ' role' : ' roles')));
       sec.append(dh); items.forEach(j => sec.append(jobCard(j))); list.append(sec);
     });
+    checkLinks(shown.filter(j => ['saved','applied'].includes(statusOf(j,'job'))));
+  }
+  /* is the advert still there? checked by the Google service for saved and applied roles */
+  const LINKS = {}; let linkBusy = false;
+  function showGone(j, box){
+    const dd = j.closing ? daysUntil(j.closing) : null, r = LINKS[safeUrl(j.url)];
+    let msg = '';
+    if (r && r.state === 'gone') msg = '⚠ This advert has gone. ' + r.reason + ' The Open advert link may now show a different job.';
+    else if (r && r.state === 'unsure') msg = '⚠ This advert may have gone. ' + r.reason;
+    else if (dd != null && dd < 0) msg = '⚠ The closing date has passed, so the advert may have been taken down.';
+    box.textContent = msg; box.hidden = !msg;
+    const a = box.parentNode && box.parentNode.querySelector('a.open[data-chk]'); if (a && r && r.state === 'gone') a.textContent = 'Open advert (gone)';
+  }
+  async function checkLinks(jobs){
+    if (!api() || linkBusy) return; const todo = jobs.filter(j => safeUrl(j.url) && !(safeUrl(j.url) in LINKS)).slice(0, 25); if (!todo.length) return;
+    linkBusy = true;
+    try { const r = await call({action:'linkcheck', items: todo.map(j => ({url: safeUrl(j.url), title: str(j.title)}))}); arr(r.items).forEach(x => LINKS[x.url] = x); todo.forEach(j => { if (!(safeUrl(j.url) in LINKS)) LINKS[safeUrl(j.url)] = {state:'ok'}; }); }
+    catch(e){ todo.forEach(j => LINKS[safeUrl(j.url)] = {state:'ok'}); }
+    linkBusy = false;
+    document.querySelectorAll('p[data-gone-for]').forEach(p => { const j = arr(DATA.jobs).find(x => safeUrl(x.url) === p.dataset.goneFor); if (j) showGone(j, p); });
   }
   function jobCard(j){
     const s = statusOf(j,'job');
@@ -482,7 +516,9 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     c.append(meta);
     if (j.why) c.append(el('p','why',j.why));
     const row = el('div','row'); const left = el('div','acts');
-    const href = safeUrl(j.url); if (href){ const a = el('a','open','Open advert'); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; left.append(a); }
+    const href = safeUrl(j.url); if (href){ const a = el('a','open','Open advert'); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; left.append(a); a.dataset.chk = href; }
+    const fhref = safeUrl(j.applyUrl); if (fhref && fhref !== href){ const f = el('a','open','Application form'); f.href = fhref; f.target = '_blank'; f.rel = 'noopener noreferrer'; f.title = 'The form found on the advert. The Open advert link still goes to the job page itself.'; left.append(f); }
+    const gone = el('p','status warn'); gone.hidden = true; gone.dataset.goneFor = href || ''; c.append(gone); showGone(j, gone);
     let panel = null;
     if (j.draft){
       const b = el('button','btn','Application email and CV'); b.type = 'button'; b.setAttribute('aria-expanded','false');
@@ -493,7 +529,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         b.setAttribute('aria-expanded', String(!panel.hidden));
       });
     }
-    if (api() && j.category !== 'london' && !j.applyEmail) left.append(formButton('job', j, str(j.employer) + ', ' + str(j.title), safeUrl(j.url) || '', c));
+    if (api() && j.category !== 'london' && !j.applyEmail) left.append(formButton('job', j, str(j.employer) + ', ' + str(j.title), safeUrl(j.applyUrl) || safeUrl(j.url) || '', c));
     if (api()){
       const sb = el('button','btn solid','Apply by email'); sb.type = 'button'; left.append(sb); let comp = null;
       sb.addEventListener('click', () => {
@@ -744,7 +780,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         const url = (u.value.match(/https:\/\/[^\s"'<>]+/) || [''])[0];
         if (!url){ st.className = 'status warn'; st.textContent = 'Paste the full address, starting https://'; return; }
         sv.disabled = true; st.className = 'status'; st.textContent = 'Saving...';
-        try { const r = await call({action:'forms', op:'add', key: kind + ':' + item.id, item:{kind, id:item.id, label, url, note:n.value}}); if (r.ok === false) throw new Error(r.error); FORMS = arr(r.items); formCount(); st.className = 'status good'; st.textContent = 'Saved. It is on your Forms to fill list.'; b.textContent = '📝 Form saved for Claude'; }
+        try { const r = await call({action:'forms', op:'add', key: kind + ':' + item.id, item:{kind, id:item.id, label, url, advert: safeUrl(item.url) || '', note:n.value}}); if (r.ok === false) throw new Error(r.error); FORMS = arr(r.items); formCount(); st.className = 'status good'; st.textContent = 'Saved. It is on your Forms to fill list.'; b.textContent = '📝 Form saved for Claude'; }
         catch(e){ st.className = 'status warn'; st.textContent = e.message || 'Could not save. Try again.'; }
         sv.disabled = false;
       });
@@ -769,7 +805,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       c.append(top);
       if (f.note) c.append(el('p','why','Your note: ' + f.note));
       if (f.claudeNote) c.append(el('p','status','Claude: ' + f.claudeNote));
-      const r = el('div','acts'); const a = el('a','open','Open the form'); a.href = safeUrl(f.url) || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a);
+      const r = el('div','acts'); const a = el('a','open','Open the form'); a.href = safeUrl(f.url) || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer'; r.append(a); if (safeUrl(f.advert) && f.advert !== f.url){ const ad = el('a','open','Open the job advert'); ad.href = safeUrl(f.advert); ad.target = '_blank'; ad.rel = 'noopener noreferrer'; r.append(ad); }
       if (f.status !== 'sent'){ const done = el('button','btn','I have submitted it'); done.type = 'button'; done.addEventListener('click', async () => { const res = await call({action:'forms', op:'status', key:f.key, status:'sent'}); FORMS = arr(res.items); formCount(); renderForms(); }); r.append(done); }
       const rm = el('button','btn','Remove'); rm.type = 'button'; rm.addEventListener('click', async () => { const res = await call({action:'forms', op:'remove', key:f.key}); FORMS = arr(res.items); formCount(); renderForms(); }); r.append(rm);
       c.append(r); box.append(c);
@@ -834,7 +870,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         c.append(w);
       }
       const bo = bouncedTo(addrs(o.contact));
-      if (bo) c.append(el('p','status warn','Your email to ' + bounceOf(bo) + ' bounced: the address does not work. Look for another contact on their website and send again.'));
+      if (bo){ c.append(el('p','status warn','Your email to ' + bounceOf(bo) + ' bounced: the address does not work. Look for another contact on their website and send again.')); if (api()) c.append(retryBox(bo, bounceOf(bo))); }
       if (o.why) c.append(el('p','why',o.why));
       if (o.contact){ const ad = el('div','addr'); ad.append(el('span','status','To:')); const code = el('code',null,o.contact); const cb = el('button','btn','Copy address'); cb.type='button'; cb.addEventListener('click', () => copy(o.contact, cb, code)); ad.append(code, cb); c.append(ad); }
       if (o.contactNote) c.append(el('p','status',o.contactNote));
@@ -979,7 +1015,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     if (jobs.length) t += '\n\n## Roles currently on her list (newest first)\n' + jobs.map(j => '- ' + [j.title, j.employer, j.category, j.hours, j.pay, j.closing ? 'closes ' + j.closing : '', 'status: ' + statusOf(j,'job'), j.url].filter(Boolean).join(' | ')).join('\n');
     return t;
   }
-  function renderHandover(){ $('hoText').textContent = handoverText(); }
+  function renderHandover(){ $('hoText').textContent = handoverText(); loadBackups(); }
   $('hoCopy').addEventListener('click', () => copy(handoverText(), $('hoCopy'), $('hoText')));
   $('hoPrompt').addEventListener('click', () => { const t = str((DATA.handover || {}).text), i = t.search(/^## \d+\. Prompt for a new agent/m); const body = i < 0 ? handoverText() : t.slice(t.indexOf('\n', i) + 1).trim(); copy(body, $('hoPrompt'), $('hoText')); $('hoSt').textContent = 'Prompt copied. Paste it into the new agent, then give it access to the code.'; });
   $('hoDl').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([handoverText()], {type:'text/markdown'})); a.download = 'handover.md'; document.body.append(a); a.click(); a.remove(); $('hoSt').textContent = 'Saved as handover.md'; });
@@ -1018,6 +1054,28 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     b.disabled = false;
   });
 
+  /* ---------- picture of the public website ---------- */
+  function sitePic(fresh){
+    const u = str(DATA.publicSite); if (!u) return;
+    $('sitePrevLink').href = u;
+    $('sitePreview').src = 'https://s.wordpress.com/mshots/v1/' + encodeURIComponent(u + (fresh ? (u.includes('?') ? '&' : '?') + 'v=' + Date.now() : '')) + '?w=1200&h=900';
+  }
+  $('sitePrevRefresh').addEventListener('click', () => { sitePic(true); $('sitePrevSt').textContent = 'Taking a new picture. If it shows a loading image, press Refresh again in a minute.'; setTimeout(() => sitePic(false), 20000); });
+
+  /* ---------- backups in her Google Drive ---------- */
+  async function loadBackups(op){
+    const box = $('bkList'), st = $('bkSt'); if (!api()){ st.textContent = 'Needs the Google service.'; return; }
+    st.textContent = op ? 'Making a backup in your Google Drive...' : 'Checking your Google Drive...';
+    try {
+      const r = await call(op ? {action:'backups', op} : {action:'backups'});
+      if (!r.ok) throw 0;
+      $('bkFolder').href = r.folder; $('bkFolder').hidden = false;
+      box.replaceChildren(...arr(r.items).slice(0, 6).map(i => { const a = el('a', null, i.name + ' (' + fmtDay(i.t) + ', ' + Math.max(1, Math.round(i.size / 1024)) + ' KB)'); a.href = i.url; a.target = '_blank'; a.rel = 'noopener'; const li = el('li'); li.append(a); return li; }));
+      st.className = 'status good'; st.textContent = r.items.length ? 'Newest backup ' + daysAgo(r.items[0].t) + '. A new one is made every night at about 4am UK time.' : 'No backups yet.';
+    } catch(e){ st.className = 'status'; st.textContent = 'The Google service needs a one-off approval to use your Drive before backups can start (see Handover notes, section 7).'; }
+  }
+  $('bkNow').addEventListener('click', () => loadBackups('now'));
+
   /* ---------- my website and CV editor ---------- */
   let cvState = {cv:null, history:[], t:0};
   async function loadServerCv(){
@@ -1029,7 +1087,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     if (DATA.siteAccount){ $('siteLogin').hidden = false; $('siteLoginUser').textContent = str(DATA.siteAccount);
       const pw = str(DATA.sitePassword), mask = pw ? '•'.repeat(pw.length) : '(not saved yet)'; $('siteLoginPw').textContent = mask;
       $('siteLoginShow').onclick = () => { const hid = $('siteLoginShow').textContent === 'Show'; $('siteLoginPw').textContent = hid && pw ? pw : mask; $('siteLoginShow').textContent = hid ? 'Hide' : 'Show'; }; }
-    if (!$('sitePreview').src && DATA.sitePreview) $('sitePreview').src = DATA.sitePreview;
+    if (!$('sitePreview').src) sitePic(false);
     renderCvEditor(); renderCvHistory();
   }
   const LINES = v => arr(v).map(str).join('\n');
@@ -1274,7 +1332,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const g = el('div','grid2');
     const fromSel = field('select','from-' + uid); fromSel.disabled = true; opt(fromSel, '', 'Loading...');
     // Plain text box (iPhones can refuse pastes into email-type boxes); whatever is pasted is tidied to just the address.
-    const toIn = field('input','to-' + uid, st8.to != null ? st8.to : str(o.to), 'name@organisation.org'); toIn.type = 'text'; toIn.inputMode = 'email'; toIn.autocomplete = 'off'; toIn.spellcheck = false; toIn.setAttribute('autocapitalize','off'); toIn.setAttribute('autocorrect','off');
+    const toIn = field('input','to-' + uid, o.forceTo != null ? o.forceTo : st8.to != null ? st8.to : str(o.to), 'name@organisation.org'); toIn.type = 'text'; toIn.inputMode = 'email'; toIn.autocomplete = 'off'; toIn.spellcheck = false; toIn.setAttribute('autocapitalize','off'); toIn.setAttribute('autocorrect','off');
     const tidyTo = () => { const found = (toIn.value.match(/[^\s<>"',;:()]+@[^\s<>"',;:()]+\.[a-z]{2,}/gi) || []); if (found.length && found.join(', ') !== toIn.value.trim()) { toIn.value = [...new Set(found.map(x => x.replace(/^mailto:/i,'')))].join(', '); toIn.dispatchEvent(new Event('input')); } };
     toIn.addEventListener('paste', () => setTimeout(tidyTo, 0)); toIn.addEventListener('blur', tidyTo);
     const pasteB = el('button','btn','Paste'); pasteB.type = 'button';
@@ -1345,6 +1403,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       if (confirmBox) confirmBox.remove();
       const cvItem = allCvs().find(c => c.key === cvSel.value);
       confirmBox = el('div','confirm');
+      if (o.badTo && addrs(to).includes(o.badTo)) confirmBox.append(el('div','status warn','⚠ ' + o.badTo + ' is the address that bounced last time. It will probably bounce again. Change it in the To box unless you are sure it is now right.'));
       confirmBox.append(el('div',null,'Send to ' + to + ' from ' + fromSel.value + (cvItem ? ', with "' + cvItem.label + '" attached as ' + fmtSel.options[fmtSel.selectedIndex].text : ', with no CV attached') + '?'));
       const yes = el('button','btn solid','Yes, send it'), no = el('button','btn','Not yet'); yes.type = no.type = 'button';
       const rr = el('div','acts'); rr.append(yes, no); confirmBox.append(rr); r.after(confirmBox); yes.focus();
@@ -1406,6 +1465,27 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     try { await loadCorr(true); } catch(e){ box.replaceChildren(el('p','status','Could not load. Check your connection.')); return; }
     renderCorr();
   }
+  function retryBox(i, bnc){
+    const wrap = el('div'), b = el('button','btn solid','Try again with a corrected address'); b.type = 'button'; const st = el('span','status');
+    const r0 = el('div','acts'); r0.append(b, st); wrap.append(r0);
+    b.addEventListener('click', async () => {
+      const orig = CORR.sent.filter(m => addrs(m.to + ',' + m.cc).includes(bnc)).sort((a, c2) => c2.t - a.t)[0];
+      if (!orig){ st.textContent = 'Could not find the original email in your sent folder.'; return; }
+      b.disabled = true; st.textContent = 'Getting the email you sent...';
+      let text = '', subject = orig.subject;
+      try { const r = await call({action:'mail', op:'read', thread: orig.thread}); const m = arr(r.messages).filter(x => addrs(x.to).includes(bnc)).pop() || arr(r.messages)[0]; if (m) text = str(m.body).split(/\n\s*On .{5,120}wrote:\s*\n|\n-{2,}\s*Original Message/)[0].trim(); } catch(e){}
+      const ref = orig.ref || {}, item = ref.kind === 'job' ? arr(DATA.jobs).find(j => j.id === ref.id) : ref.kind === 'out' ? arr(DATA.outreach).find(o => o.id === ref.id) : null;
+      const kind = item ? ref.kind : 'retry', id = item ? ref.id : orig.thread;
+      st.textContent = '';
+      const comp = composer({kind, id, label: ref.label || subject, to: bnc, forceTo: bnc, badTo: bnc, subject, body: text || (item ? str(item.draft ? item.draft.email : item.email) : ''), lang: ref.lang || (item && item.language) || 'en',
+        cvKey: item && kind === 'job' && item.draft && item.draft.cv ? 'job:' + item.id : 'base',
+        note: 'Last time this went to ' + bnc + ' and bounced. Correct the address in the To box first (check the organisation\'s own website), and edit the email if you like, then send.',
+        onSent: () => { if (item) markSent(kind, item.id); CORR = null; }});
+      wrap.append(comp); b.hidden = true;
+      const to = comp.querySelector('input[id^="to-"]'); if (to){ to.style.borderColor = 'var(--onair)'; to.focus(); to.select(); to.addEventListener('input', () => to.style.borderColor = ''); }
+    });
+    return wrap;
+  }
   function inboxCard(i, box, list){
     const linked = linkedSent(i), muted = isMuted(i);
     const c = el('article','slot ' + (linked.length ? 'outreach' : 'london') + (muted ? ' pass' : ''));
@@ -1413,8 +1493,8 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     h.append(el('div','cat', fmtDay(i.t) + ' · ' + daysAgo(i.t) + (i.unread ? ' · unread' : '')), el('h2',null, (linked.length && !i.auto ? '★ ' : '') + i.subject), el('div','emp','From ' + i.from));
     const bnc = bounceOf(i);
     top.append(h, el('span','badge ' + (linked.length && !i.auto ? 'new' : ''), bnc ? 'Not delivered' : isJobAlert(i) ? 'Job alert' : i.auto ? (linked.length ? 'Automatic reply' : 'Automatic') : linked.length ? 'Reply' : muted ? 'Not interested' : 'Not linked to anything you sent'));
-    if (bnc) c.append(el('p','status warn','The email to ' + bnc + ' did not arrive: that address does not work. Look for another contact on their website.'));
     c.append(top);
+    if (bnc){ c.append(el('p','status warn','The email to ' + bnc + ' did not arrive: that address does not work. Look for another contact on their website, then try again.')); c.append(retryBox(i, bnc)); }
     if (linked.length) c.append(el('p','status','Linked (' + (whyLinked(i, linked[linked.length-1]) || 'same address') + ') to what you sent ' + fmtDay(linked[linked.length-1].t) + ': ' + linked[linked.length-1].subject));
     const body = el('div','mail', str(i.snippet) + (str(i.snippet).length >= 260 ? '...' : '')); c.append(body);
     const r = el('div','acts');

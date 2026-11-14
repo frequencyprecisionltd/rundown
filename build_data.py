@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 
 ITER = 250000
-KEEP_JOB = ["title","employer","category","location","hours","pay","fte","closing","why","url","added","status","draft","applyEmail"]
+KEEP_JOB = ["title","employer","category","location","hours","pay","fte","closing","why","url","added","status","draft","applyEmail","applyUrl"]
 KEEP_OUT = ["org","country","sector","why","url","contact","contactNote","subject","email","language","added","status"]
 
 def load(folder, keep):
