@@ -45,6 +45,28 @@ h1{font:700 clamp(28px,7vw,40px)/1.05 var(--display);margin:4px 0 0;letter-spaci
 .menu .ct:empty{display:none}
 .here{font:700 22px/1.2 var(--display);margin:4px 0 0;display:flex;align-items:center;gap:10px}
 .menu .grp{padding:8px 8px 10px}
+/* Progress charts */
+:root{--w1:#2a78d6;--w2:#1baf7a;--w3:#eda100;--w4:#e87ba4;--w5:#6250d6;--w6:#eb6834}
+@media (prefers-color-scheme: dark){:root{--w1:#3987e5;--w2:#199e70;--w3:#c98500;--w4:#d55181;--w5:#9085e9;--w6:#d95926}}
+.viz{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--w1:#2a78d6;--w2:#1baf7a;--w3:#eda100;--w4:#e87ba4;--w5:#6250d6;--w6:#eb6834;--grid:#e6e8ee;--axis:#5b6074}
+@media (prefers-color-scheme: dark){.viz{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--w1:#3987e5;--w2:#199e70;--w3:#c98500;--w4:#d55181;--w5:#9085e9;--w6:#d95926;--grid:#2b2f40;--axis:#a2a7ba}}
+.tgh{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 6px}
+.tilesrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat b{display:block;font:700 26px/1.1 var(--display)}
+.stat span{font-size:13px;color:var(--muted)}
+.chartbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;position:relative}
+.chartbox svg{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--ink);margin:4px 0 8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.12);min-width:140px}
+.tip .r{display:flex;justify-content:space-between;gap:12px}
+.vtable{width:100%;border-collapse:collapse;font-size:13px}
+.vtable th,.vtable td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:right}
+.vtable th:first-child,.vtable td:first-child{text-align:left}
+.wtag{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;margin:2px 6px 0 0;border:1px solid var(--line);background:var(--surface)}
+.wtag i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:0}
+.wtag.ideal{border-color:#eda100;background:rgba(237,161,0,.12)}
 @media (max-width:560px){.menu .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:420px){.menu{gap:10px}.menu button{min-height:48px;font-size:13.5px}.menu .ic{font-size:20px;width:22px}}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
@@ -151,6 +173,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <div class="grp"><div class="gl">Behind the scenes</div><div class="tiles">
         <button type="button" role="tab" data-tab="stats" aria-selected="false"><span class="ic" aria-hidden="true">📊</span><span class="lbl">Stats</span><span class="ct" id="ct-stats"></span></button>
         <button type="button" role="tab" data-tab="handover" aria-selected="false"><span class="ic" aria-hidden="true">🗂️</span><span class="lbl">Handover</span><span class="ct" id="ct-handover"></span></button>
+        <button type="button" role="tab" data-tab="progress" aria-selected="false"><span class="ic" aria-hidden="true">📈</span><span class="lbl">Progress</span><span class="ct" id="ct-progress"></span></button>
       </div></div>
     </nav>
     <h2 class="here" id="here">💼  Advertised roles</h2>
@@ -282,6 +305,32 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
       <div class="acts"><button type="button" class="btn" id="vaultShow">Show</button><button type="button" class="btn solid" id="vaultSave">Save</button><span class="status" id="vaultSt"></span></div>
     </section>
 
+    <section id="progressView" hidden class="controls">
+      <p class="sub">How the search is going. Counts come from your board and your application inbox, and update each time you open this page.</p>
+      <div id="pTiles"></div>
+      <div class="seg" id="pWhat">
+        <button type="button" data-w="roles" aria-pressed="true">Roles</button>
+        <button type="button" data-w="kind" aria-pressed="false">Type of work</button>
+        <button type="button" data-w="spec" aria-pressed="false">Speculative emails</button>
+        <button type="button" data-w="sent" aria-pressed="false">Emails sent</button>
+        <button type="button" data-w="back" aria-pressed="false">What came back</button>
+      </div>
+      <div class="seg" id="pPer">
+        <button type="button" data-p="day" aria-pressed="false">By day</button>
+        <button type="button" data-p="week" aria-pressed="true">By week</button>
+        <button type="button" data-p="month" aria-pressed="false">By month</button>
+      </div>
+      <div class="chartbox viz" id="pChart"></div>
+      <div class="acts"><button type="button" class="btn" id="pTable">Show as a table</button></div>
+      <div id="pTableBox" hidden></div>
+      <h2 style="margin:10px 0 0">Closest to what you are after</h2>
+      <p class="sub">Fully remote and part time (two or three days a week) on a good salary, or a role in a warm, sunny island or coastal place where French or English is spoken, especially with relocation, paid travel or accommodation. Each role's type of work is worked out from the advert's location and hours, so check the advert.</p>
+      <div id="pIdeal" class="day"></div>
+      <h2 style="margin:10px 0 0">Conversations with organisations</h2>
+      <p class="sub">Organisations where it has gone beyond an automatic reply: they wrote back more than once, or you wrote again after their reply. Matched by organisation (their email domain), not just the address or subject.</p>
+      <div id="pConv" class="day"></div>
+    </section>
+
     <section id="formsView" hidden class="controls">
       <p class="sub">Jobs that ask you to apply through a form on their website instead of by email. Press "Claude, fill in the form" on a role, paste in the form's address, and it is saved here. Then ask Claude (in a browser Claude can use) to "fill the saved forms": Claude opens each form, fills it in from your tailored CV and covering email, and puts up a red banner whenever a person needs to sign in, tick an agreement or press Submit. Nothing is submitted until a person presses the button.</p>
       <div class="counts" id="formCounts"></div>
@@ -363,7 +412,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
     const tb = document.querySelector('#tabs button[data-tab="' + t + '"]'); if (tb) $('here').textContent = tb.querySelector('.ic').textContent + '  ' + tb.querySelector('.lbl').textContent;
-    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('formsView').hidden = t !== 'forms'; if (t === 'forms') renderForms(); $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats(); $('sentView').hidden = t !== 'sent'; if (t === 'sent') refreshSent(); $('msgsView').hidden = t !== 'msgs'; if (t === 'msgs') refreshMsgs(); $('handoverView').hidden = t !== 'handover'; if (t === 'handover') renderHandover(); $('profilesView').hidden = t !== 'profiles'; if (t === 'profiles') refreshProfiles(); $('siteView').hidden = t !== 'site'; if (t === 'site') renderSite();
+    $('rolesView').hidden = t !== 'roles'; $('outreachView').hidden = t !== 'outreach'; $('alertsView').hidden = t !== 'alerts'; $('formsView').hidden = t !== 'forms'; if (t === 'forms') renderForms(); $('progressView').hidden = t !== 'progress'; if (t === 'progress') renderProgress(); $('cvsView').hidden = t !== 'cvs'; if (t === 'cvs') refreshCodes(); $('statsView').hidden = t !== 'stats'; if (t === 'stats') refreshStats(); $('sentView').hidden = t !== 'sent'; if (t === 'sent') refreshSent(); $('msgsView').hidden = t !== 'msgs'; if (t === 'msgs') refreshMsgs(); $('handoverView').hidden = t !== 'handover'; if (t === 'handover') renderHandover(); $('profilesView').hidden = t !== 'profiles'; if (t === 'profiles') refreshProfiles(); $('siteView').hidden = t !== 'site'; if (t === 'site') renderSite();
   }
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; showTab(b.dataset.tab); $('here').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'}); });
   $('catSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cat = b.dataset.cat; document.querySelectorAll('#catSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderRoles(); });
@@ -421,6 +470,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const top = el('div','top'); const head = el('div');
     head.append(el('div','cat', CATNAME[ck]), el('h2',null, j.title || 'Untitled role'));
     if (j.employer) head.append(el('div','emp', j.employer));
+    head.append(workTag(j));
     top.append(head, el('span','badge ' + s, {new:'New', saved:'Saved', applied:'Applied', pass:'Not for me'}[s] || 'New'));
     c.append(top);
     const meta = el('div','meta');
@@ -519,6 +569,156 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
     zip.file('word/document.xml', doc);
     return zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  }
+
+  /* ---------- progress charts ---------- */
+  let pWhat = 'roles', pPer = 'week';
+  $('pWhat').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pWhat = b.dataset.w; document.querySelectorAll('#pWhat button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); drawProgress(); });
+  $('pPer').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pPer = b.dataset.p; document.querySelectorAll('#pPer button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); drawProgress(); });
+  $('pTable').addEventListener('click', () => { const h = $('pTableBox').hidden; $('pTableBox').hidden = !h; $('pTable').textContent = h ? 'Hide the table' : 'Show as a table'; });
+  const REJECT_RE = /unfortunately|regret|not been successful|unsuccessful|not able to offer|no (current )?(vacanc|openings|positions)|not (currently )?recruiting|position has (now )?been filled|malheureusement|pas de poste|ne pas donner suite|pas retenue|к сожалению/i;
+  const INTEREST_RE = /interview|shortlist|short-list|would you be available|are you available|(have|arrange|set up) a (call|chat|conversation)|like to (talk|speak|meet|chat)|next stage|second round|entretien|rencontrer|échanger|disponibilit/i;
+  function orgKey(addr){ return dom(addr) || addr; }
+  function classifyBack(i){
+    if (bounceOf(i)) return 'Wrong address';
+    const text = i.subject + ' ' + i.snippet;
+    if (REJECT_RE.test(text)) return 'No or turned down';
+    if (i.auto) return 'Automatic acknowledgement';
+    if (INTEREST_RE.test(text)) return 'Interest or interview';
+    return 'Reply';
+  }
+  function conversations(){
+    if (!CORR) return [];
+    const by = {};
+    CORR.inbox.filter(i => !isMuted(i) && !bounceOf(i) && !isJobAlert(i) && linkedSent(i).length).forEach(i => {
+      const k = orgKey(i.addr); (by[k] = by[k] || {org:k, in:[], label:''}).in.push(i);
+      const ls = linkedSent(i); if (!by[k].label){ const kk = kindOf(ls[ls.length-1]); by[k].label = kk[1] || ls[ls.length-1].subject; }
+    });
+    return Object.values(by).map(c => {
+      const real = c.in.filter(i => !i.auto); const first = real.length ? Math.min(...real.map(i => i.t)) : 0;
+      const after = first ? CORR.sent.filter(m => m.t > first && addrs(m.to + ',' + m.cc).some(a => orgKey(a) === c.org)).length : 0;
+      c.real = real.length; c.after = after; c.interest = real.some(i => INTEREST_RE.test(i.subject + ' ' + i.snippet)); c.last = Math.max(...c.in.map(i => i.t));
+      return c;
+    }).filter(c => c.real >= 2 || (c.real >= 1 && c.after >= 1)).sort((a,b) => b.last - a.last);
+  }
+  function bucketsFor(per){
+    const out = [], now = new Date(); now.setHours(0,0,0,0);
+    const narrow = innerWidth < 560, n = per === 'day' ? (narrow ? 7 : 14) : (narrow ? 6 : 12);
+    for (let k = n - 1; k >= 0; k--){
+      let a, b, label;
+      if (per === 'day'){ a = new Date(now); a.setDate(a.getDate() - k); b = new Date(a); b.setDate(b.getDate() + 1); label = a.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+      else if (per === 'week'){ a = new Date(now); a.setDate(a.getDate() - ((a.getDay() + 6) % 7) - 7 * k); b = new Date(a); b.setDate(b.getDate() + 7); label = a.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+      else { a = new Date(now.getFullYear(), now.getMonth() - k, 1); b = new Date(a.getFullYear(), a.getMonth() + 1, 1); label = a.toLocaleDateString('en-GB',{month:'short',year:'2-digit'}); }
+      out.push({a:a.getTime(), b:b.getTime(), label});
+    }
+    return out;
+  }
+  const WORK = [
+    {k:'rft', name:'Remote, full time', color:'var(--w1)'},
+    {k:'rpt', name:'Remote, part time', color:'var(--w2)'},
+    {k:'sun', name:'Island or warm place abroad', color:'var(--w3)'},
+    {k:'opt', name:'Office or hybrid, part time', color:'var(--w4)'},
+    {k:'oft', name:'Office or hybrid, full time', color:'var(--w5)'},
+    {k:'ldn', name:'London based', color:'var(--w6)'}];
+  const SUNNY_RE = /jersey|guernsey|channel islands?|alderney|sark|caribbean|barbados|jamaica|bahamas|bermuda|cayman|trinidad|tobago|grenada|antigua|st\.? lucia|sainte?-lucie|dominica|martinique|guadeloupe|saint[- ]martin|st\.? barth|guyane|french guiana|mauritius|maurice|r[ée]union|seychelles|maldives|madagascar|mayotte|comores|comoros|zanzibar|indian ocean|oc[ée]an indien|pacific|pacifique|tahiti|polyn[ée]sie|french polynesia|nouvelle[- ]cal[ée]donie|new caledonia|fiji|vanuatu|samoa|tonga|cook islands|hawaii|malta|gozo|cyprus|gibraltar|canary|canaries|canarias|tenerife|gran canaria|lanzarote|fuerteventura|madeira|azores|a[çc]ores|cape verde|cabo verde|balearic|mallorca|majorca|ibiza|menorca|corsica|corse|sicily|sardinia|crete|nice|c[ôo]te d'azur|marseille|montpellier|lisbon|algarve|cape town|dubai/i;
+  const PERK_RE = /relocation (package|support|allowance|assistance|paid|covered)|paid relocation|relocation costs|accommodation (provided|included|paid)|housing (provided|allowance)|flights? (paid|included|home)|travel (paid|covered)|family (relocation|allowance)/i;
+  function workOf(j){
+    const loc = str(j.location), hrs = str(j.hours), all = loc + ' ' + hrs + ' ' + str(j.pay) + ' ' + str(j.why);
+    const remote = /fully remote|home[- ]based|work from anywhere|^remote|\bremote\b(?!.{0,15}not)/i.test(loc) && !/on site(?! or)|relocation needed/i.test(loc);
+    const part = !/^full time(?!.{0,40}(or 0\.\d|part time considered|2 to 3 days))/i.test(hrs) && /part[- ]time|\d(\.\d)? days? a (week|month)|0\.\d+ ?fte|freelance|consultancy|retainer|\b(1[0-9]|2[0-9]) hours a week|pro rata/i.test(hrs);
+    const london = /^london\b/i.test(loc) || (j.category === 'london' && !/fully remote|home[- ]based|^remote/i.test(loc));
+    const sunny = SUNNY_RE.test(loc) && !remote;
+    let k;
+    if (sunny) k = 'sun';
+    else if (london) k = 'ldn';
+    else if (remote) k = part ? 'rpt' : 'rft';
+    else k = part ? 'opt' : 'oft';
+    const good = typeof j.fte === 'number' && j.fte >= 50000;
+    const perks = PERK_RE.test(all);
+    const ideal = (k === 'rpt' && good && /2 to 3 days|2\.5 days|3 days|21 hours|2[0-5] hours|0\.[4-6]/i.test(hrs + ' ' + str(j.why))) || (k === 'sun' && (good || perks));
+    return {k, ideal, perks, good};
+  }
+  function workTag(j){ const w = workOf(j), d = WORK.find(x => x.k === w.k); const t = el('span','wtag' + (w.ideal ? ' ideal' : '')); const i = el('i'); i.style.background = d.color; t.append(i, document.createTextNode((w.ideal ? '★ ' : '') + d.name + (w.perks ? ', relocation or travel help' : ''))); return t; }
+  function dayOf(s){ const d = new Date(str(s) + 'T12:00:00'); return isNaN(d) ? 0 : d.getTime(); }
+  function progressSeries(){
+    const B = bucketsFor(pPer), idx = t => B.findIndex(x => t >= x.a && t < x.b);
+    const mk = (names) => names.map((n, k) => ({name:n, color:'var(--s' + (k + 1) + ')', values:B.map(() => 0)}));
+    let S;
+    if (pWhat === 'roles'){
+      S = mk(['Kept (saved or applied)','Not for me','Not looked at yet']);
+      arr(DATA.jobs).filter(j => j.category !== 'london').forEach(j => { const i = idx(dayOf(j.added)); if (i < 0) return; const s = statusOf(j,'job'); S[s === 'saved' || s === 'applied' ? 0 : s === 'pass' ? 1 : 2].values[i]++; });
+    } else if (pWhat === 'kind'){
+      S = WORK.map(w => ({name:w.name, color:w.color, values:B.map(() => 0)}));
+      arr(DATA.jobs).forEach(j => { const i = idx(dayOf(j.added)); if (i < 0) return; S[WORK.findIndex(w => w.k === workOf(j).k)].values[i]++; });
+    } else if (pWhat === 'spec'){
+      S = mk(['Email sent','Interested','Not interested','Not looked at yet']);
+      arr(DATA.outreach).forEach(o => { const i = idx(dayOf(o.added)); if (i < 0) return; const s = statusOf(o,'out'); S[s === 'sent' ? 0 : s === 'saved' ? 1 : s === 'skip' ? 2 : 3].values[i]++; });
+    } else if (pWhat === 'sent'){
+      S = mk(['Speculative emails','Applications for advertised jobs']);
+      if (CORR) CORR.sent.forEach(m => { const k = kindOf(m)[0]; if (k === 'Other') return; const i = idx(m.t); if (i >= 0) S[k === 'Speculative' ? 0 : 1].values[i]++; });
+    } else {
+      const names = ['Interest or interview','Reply','Automatic acknowledgement','No or turned down','Wrong address'];
+      S = mk(names);
+      if (CORR) CORR.inbox.filter(i => !isMuted(i) && !isJobAlert(i) && (bounceOf(i) || linkedSent(i).length)).forEach(i => { const ix = idx(i.t); if (ix >= 0) S[names.indexOf(classifyBack(i))].values[ix]++; });
+    }
+    return {B, S};
+  }
+  function drawProgress(){
+    const box = $('pChart'), {B, S} = progressSeries();
+    const totals = B.map((_, i) => S.reduce((a, s) => a + s.values[i], 0)), max = Math.max(4, ...totals);
+    const step = Math.ceil(max / 4), top = step * 4;
+    const narrow = innerWidth < 560, W = narrow ? 380 : 720, H = narrow ? 260 : 240, L = 34, R = 8, T = 10, Bm = 28, cw = (W - L - R) / B.length, bw = Math.min(40, cw * 0.62);
+    const y = v => T + (H - T - Bm) * (1 - v / top);
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bar chart">';
+    for (let g = 0; g <= 4; g++){ const v = g * step, yy = y(v); svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--grid)" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="11" fill="var(--axis)">' + v + '</text>'; }
+    B.forEach((b, i) => {
+      const x = L + cw * i + (cw - bw) / 2; let acc = 0;
+      S.forEach((s, k) => { const v = s.values[i]; if (!v) return; const y1 = y(acc + v), y0 = y(acc); const h = Math.max(1, y0 - y1 - (acc ? 2 : 0)); svg += '<rect x="' + x + '" y="' + y1 + '" width="' + bw + '" height="' + h + '" rx="' + (acc + v === totals[i] ? 3 : 0) + '" fill="' + s.color + '"/>'; acc += v; });
+      const every = B.length > 12 ? 2 : 1;
+      if (i % every === 0 || i === B.length - 1) svg += '<text x="' + (x + bw / 2) + '" y="' + (H - 9) + '" text-anchor="middle" font-size="11" fill="var(--axis)">' + esc(b.label) + '</text>';
+      svg += '<rect class="hit" data-i="' + i + '" x="' + (L + cw * i) + '" y="' + T + '" width="' + cw + '" height="' + (H - T - Bm) + '" fill="transparent"/>';
+    });
+    svg += '</svg>';
+    const legend = '<div class="legend">' + S.map(s => '<span><i style="background:' + s.color + '"></i>' + esc(s.name) + '</span>').join('') + '</div>';
+    box.innerHTML = legend + svg + '<div class="tip" hidden></div>';
+    const tip = box.querySelector('.tip');
+    box.querySelectorAll('.hit').forEach(h => {
+      const show = () => { const i = +h.dataset.i; tip.innerHTML = '<div class="subj">' + esc(B[i].label) + (pPer === 'week' ? ' (week)' : '') + '</div>' + S.map(s => '<div class="r"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + s.color + ';margin-right:6px"></i>' + esc(s.name) + '</span><b>' + s.values[i] + '</b></div>').join('') + '<div class="r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>Total</span><b>' + totals[i] + '</b></div>'; tip.hidden = false; const r = h.getBoundingClientRect(), br = box.getBoundingClientRect(); let left = r.left - br.left + r.width / 2 + 8; if (left > br.width - 170) left = r.left - br.left - 170; tip.style.left = Math.max(4, left) + 'px'; tip.style.top = '40px'; h.setAttribute('fill','rgba(127,127,127,.08)'); };
+      const hide = () => { tip.hidden = true; h.setAttribute('fill','transparent'); };
+      h.addEventListener('mouseenter', show); h.addEventListener('mouseleave', hide); h.addEventListener('click', show);
+    });
+    $('pTableBox').innerHTML = '<table class="vtable"><thead><tr><th>' + (pPer === 'day' ? 'Day' : pPer === 'week' ? 'Week from' : 'Month') + '</th>' + S.map(s => '<th>' + esc(s.name) + '</th>').join('') + '<th>Total</th></tr></thead><tbody>' + B.map((b, i) => '<tr><td>' + esc(b.label) + '</td>' + S.map(s => '<td>' + s.values[i] + '</td>').join('') + '<td>' + totals[i] + '</td></tr>').join('') + '</tbody></table>';
+  }
+  function esc(x){ return str(x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  async function renderProgress(){
+    if (api() && !CORR){ $('pTiles').replaceChildren(el('p','status','Reading your inbox...')); try { await loadCorr(); } catch(e){} }
+    const jobs = arr(DATA.jobs).filter(j => j.category !== 'london'), outs = arr(DATA.outreach);
+    const js = k => jobs.filter(j => statusOf(j,'job') === k).length, os = k => outs.filter(o => statusOf(o,'out') === k).length;
+    const sent = CORR ? CORR.sent.map(kindOf) : [];
+    const back = CORR ? CORR.inbox.filter(i => !isMuted(i) && !isJobAlert(i) && (bounceOf(i) || linkedSent(i).length)).map(classifyBack) : [];
+    const conv = conversations();
+    const tiles = [
+      [jobs.length, 'roles found'], [js('saved') + js('applied'), 'roles kept'], [js('pass'), 'roles not for me'],
+      [outs.length, 'speculative ideas'], [os('sent'), 'speculative emails sent'], [os('saved'), 'speculative saved as interested'], [os('skip'), 'speculative not interested'],
+      [sent.filter(k => k[0] === 'Advertised job').length, 'applications sent'],
+      [back.filter(k => k === 'Reply' || k === 'Interest or interview').length, 'real replies'], [back.filter(k => k === 'No or turned down').length, 'turned down'],
+      [back.filter(k => k === 'Wrong address').length, 'wrong addresses'], [conv.length, 'conversations started']];
+    const tileGroup = (title, list) => { const g = el('div'); g.append(el('h3','tgh',title)); const r = el('div','tilesrow'); r.append(...list.map(([n, l]) => { const d = el('div','stat'); d.append(el('b',null,String(n)), el('span',null,l)); return d; })); g.append(r); return g; };
+    $('pTiles').replaceChildren(tileGroup('Advertised roles', tiles.slice(0,3)), tileGroup('Speculative emails', tiles.slice(3,7)), tileGroup('What has been sent and what came back', tiles.slice(7)));
+    $('ct-progress').textContent = conv.length ? '💬 ' + conv.length : '';
+    const allJobs = arr(DATA.jobs), wk = allJobs.map(workOf);
+    const wt = WORK.map(w => [wk.filter(x => x.k === w.k).length, w.name.toLowerCase()]);
+    const sunOut = arr(DATA.outreach).filter(o => SUNNY_RE.test(str(o.country))).length;
+    $('pTiles').insertBefore(tileGroup('Type of work (all roles found, London included)', [[wk.filter(x => x.ideal).length, '★ close to ideal'], ...wt, [sunOut, 'speculative ideas in sunny places']]), $('pTiles').children[1]);
+    const ib = $('pIdeal'); ib.replaceChildren();
+    const ideal = allJobs.filter(j => workOf(j).ideal).sort((a, b) => str(b.added).localeCompare(str(a.added)));
+    if (!ideal.length) ib.append(el('p','status','None found yet. The daily search is looking for them.'));
+    ideal.forEach(j => { const a = el('article','slot'); const h = el('div'); h.append(el('div','cat','Added ' + fmtDate(j.added) + ' · ' + ({new:'Not looked at yet', saved:'Saved', applied:'Applied', pass:'Not for me'}[statusOf(j,'job')] || '')), el('h2',null,j.title || 'Untitled role'), el('div','emp', str(j.employer) + (j.location ? ', ' + j.location : '')), workTag(j)); a.append(h, el('p','status', [j.hours, j.pay].filter(Boolean).join(' · '))); a.style.cursor = 'pointer'; a.addEventListener('click', () => { const b = document.querySelector('#tabs [data-tab=roles]'); if (b) b.click(); }); ib.append(a); });
+    drawProgress();
+    const box = $('pConv'); box.replaceChildren();
+    if (!CORR){ box.append(el('p','status','Could not read the inbox just now.')); return; }
+    if (!conv.length){ box.append(el('p','status','None yet. When an organisation writes back properly, or you reply to them, it shows here.')); return; }
+    conv.forEach(c => { const a = el('article','slot outreach'); const top = el('div','top'); const h = el('div'); h.append(el('div','cat', 'Last message ' + fmtDay(c.last) + ' · ' + daysAgo(c.last)), el('h2',null,(c.interest ? '★ ' : '') + (c.label || c.org)), el('div','emp', c.org)); top.append(h, el('span','badge new', c.interest ? 'Interest or interview' : c.real + ' replies')); a.append(top, el('p','status', c.real + ' replies from them · ' + c.after + ' emails from you since their first reply')); box.append(a); });
   }
 
   /* ---------- forms for Claude to fill ---------- */
