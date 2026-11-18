@@ -99,6 +99,22 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 .slot{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--cat);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .slot.comms{--cat:var(--comms)} .slot.broadcast{--cat:var(--broadcast)} .slot.devon{--cat:var(--devon)} .slot.london{--cat:var(--london)} .slot.outreach{--cat:var(--outreach)}
 .slot.pass{opacity:.55}
+.slot.unread h2::before{content:'';display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--onair);margin-right:7px;vertical-align:2px}
+.slot.unread h2{font-weight:700}
+.slot.replied{border-color:#e0a800;box-shadow:0 0 0 2px rgba(224,168,0,.35)}
+.slot.closed{opacity:.6;border-left-color:var(--muted)}
+.trail{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 0}
+.trail span{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;border:1px dashed var(--line);color:var(--muted);background:transparent}
+.trail span b{font-size:14px;line-height:1;font-weight:700}
+.trail span.on{border-style:solid}
+.trail span.on.read{border-color:var(--comms);color:var(--comms)}
+.trail span.on.saved{background:var(--savebg);color:var(--save);border-color:transparent}
+.trail span.on.form{background:color-mix(in srgb,var(--comms) 12%,transparent);color:var(--comms);border-color:transparent}
+.trail span.on.sent{background:var(--okbg);color:var(--ok);border-color:transparent}
+.trail span.on.reply{background:#fff4cc;color:#7a5500;border-color:#e0a800}
+@media (prefers-color-scheme: dark){.trail span.on.reply{background:#3a2e08;color:#ffd257}}
+.trail span.on.closed{background:var(--chip);color:var(--muted);border-color:transparent}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);margin:0 0 10px}
 .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .top>div{min-width:0}
 .cat{font:11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--cat)}
@@ -108,6 +124,8 @@ h2{font:600 19px/1.2 var(--display);margin:2px 0 0;overflow-wrap:anywhere;text-w
 .badge.new{background:color-mix(in srgb,var(--onair) 14%,transparent);color:var(--onair)}
 .badge.saved{background:var(--savebg);color:var(--save)}
 .badge.applied{background:var(--okbg);color:var(--ok)}
+.badge.gold{background:#fff4cc;color:#7a5500;border:1px solid #e0a800}
+@media (prefers-color-scheme: dark){.badge.gold{background:#3a2e08;color:#ffd257}}
 .meta{display:flex;flex-wrap:wrap;gap:6px}
 .meta span{font:12px var(--mono);background:var(--chip);padding:3px 8px;border-radius:5px;overflow-wrap:anywhere}
 .meta .soon{color:var(--onair)}
@@ -212,9 +230,11 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
         <button type="button" data-status="saved" aria-pressed="false">Saved</button>
         <button type="button" data-status="applied" aria-pressed="false">Applied</button>
         <button type="button" data-status="pass" aria-pressed="false">Not for me</button>
+        <button type="button" data-status="closed" aria-pressed="false">Closed</button>
         <button type="button" data-status="everything" aria-pressed="false">Everything</button>
       </div>
       <div class="counts" id="counts"></div>
+      <div class="legend" aria-label="What the marks on each role mean"><span><b style="color:var(--onair)">●</b> not opened yet</span><span>👁 read</span><span>🔖 saved</span><span>📝 form sent to Claude</span><span>✓ application emailed</span><span>⭐ reply received</span><span>🔒 closed</span></div>
       <div id="list"></div>
     </section>
 
@@ -481,31 +501,60 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
 
   function start(){
     if (DATA.generated) $('updated').textContent = 'Updated ' + new Date(DATA.generated).toLocaleString('en-GB',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
-    renderRoles(); renderOutreach(); renderAlerts(); renderCvs(); loadServerCv(); loadServerMarks(); loadForms(); if (api()) loadCorr().then(() => { if (tab !== 'sent') renderCorr(); }).catch(() => {});
+    renderRoles(); renderOutreach(); renderAlerts(); renderCvs(); loadServerCv(); loadServerMarks(); loadForms(); if (api()) loadCorr().then(() => { if (tab !== 'sent') renderCorr(); renderRoles(); }).catch(() => {});
   }
 
   /* ---------- roles ---------- */
   function renderRoles(){
     const jobs = arr(DATA.jobs);
-    const fresh = jobs.filter(j => j.category !== 'london' && statusOf(j,'job') === 'new').length;
-    const applied = jobs.filter(j => statusOf(j,'job') === 'applied').length;
+    const open = jobs.filter(j => !jobClosed(j));
+    const fresh = open.filter(j => j.category !== 'london' && statusOf(j,'job') === 'new').length;
+    const applied = jobs.filter(j => statusOf(j,'job') === 'applied' || jobSent(j)).length;
+    const replies = jobs.filter(j => jobReplied(j)).length;
     $('ct-roles').textContent = fresh || '';
-    $('counts').textContent = fresh + ' to look at · ' + applied + ' applied · ' + jobs.length + ' found in total';
+    $('counts').textContent = fresh + ' to look at · ' + applied + ' applied' + (replies ? ' · ' + replies + ' with a reply ⭐' : '') + ' · ' + (jobs.length - open.length) + ' closed · ' + jobs.length + ' found in total';
     const shown = jobs.filter(j => {
       if (cat === 'all' && j.category === 'london') return false;
       if (cat !== 'all' && j.category !== cat) return false;
-      const s = statusOf(j,'job');
-      return statusView === 'everything' ? true : s === statusView;
+      const s = statusOf(j,'job'), shut = jobClosed(j);
+      if (statusView === 'closed') return shut;
+      if (statusView === 'everything') return true;
+      if (statusView === 'applied') return !shut && (s === 'applied' || !!jobSent(j)) || (shut && !!jobReplied(j));
+      return !shut && s === statusView;
     }).sort((a,b) => str(b.added).localeCompare(str(a.added)) || ((b.fte||0)-(a.fte||0)));
     const list = $('list'); list.replaceChildren();
-    if (!shown.length){ const e = el('div','empty'); e.append(el('h2',null,'Nothing in this view'), el('p',null, statusView === 'new' ? 'You have sorted every role here. New ones arrive each morning.' : 'Try another filter above.')); list.append(e); return; }
+    if (!shown.length){ const e = el('div','empty'); e.append(el('h2',null,'Nothing in this view'), el('p',null, statusView === 'new' ? 'You have sorted every role here. New ones arrive each morning.' : statusView === 'closed' ? 'No roles have closed yet.' : 'Try another filter above.')); list.append(e); checkLinks(jobs.filter(j => !jobClosed(j) && statusOf(j,'job') !== 'pass')); return; }
     const groups = new Map(); shown.forEach(j => { const k = j.added || 'Earlier'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(j); });
     groups.forEach((items, k) => {
       const sec = el('section','day'); const dh = el('div','dayhead');
       dh.append(el('span',null,'Added ' + fmtDate(k)), el('span',null, items.length + (items.length === 1 ? ' role' : ' roles')));
       sec.append(dh); items.forEach(j => sec.append(jobCard(j))); list.append(sec);
     });
-    checkLinks(shown.filter(j => ['saved','applied'].includes(statusOf(j,'job'))));
+    checkLinks(jobs.filter(j => !jobClosed(j) && statusOf(j,'job') !== 'pass'));
+  }
+  /* what has happened with each role: read, saved, form, emailed, reply, closed */
+  function jobSeen(j, set){ const k = 'rundown.seen.job:' + j.id; try { if (set) localStorage.setItem(k, String(Date.now())); return !!localStorage.getItem(k); } catch(e){ return false; } }
+  function jobSent(j){
+    if (!CORR) return null; const to = addrs(j.applyEmail);
+    return CORR.sent.filter(m => (m.ref && m.ref.kind === 'job' && m.ref.id === j.id) || (to.length && addrs(m.to + ',' + m.cc).some(a => to.includes(a)))).sort((a, b) => a.t - b.t)[0] || null;
+  }
+  function jobReplied(j){
+    const first = jobSent(j); if (!first) return null;
+    const threads = CORR.sent.filter(m => m.ref && m.ref.kind === 'job' && m.ref.id === j.id).map(m => m.thread);
+    const to = addrs(first.to + ',' + first.cc), d = to.length ? dom(to[0]) : '';
+    return CORR.inbox.filter(i => i.t > first.t && !bounceOf(i) && !i.auto && (threads.includes(i.thread) || to.includes(i.addr) || (d && dom(i.addr) === d))).sort((a, b) => b.t - a.t)[0] || null;
+  }
+  function jobClosed(j){ const dd = j.closing ? daysUntil(j.closing) : null; const r = LINKS[safeUrl(j.url)]; return (dd != null && dd < 0) || !!(r && r.state === 'gone'); }
+  function jobTrail(j){
+    const s = statusOf(j,'job'), f = formFor('job', j.id), sent = jobSent(j), rep = jobReplied(j), t = el('div','trail');
+    const add = (cls, on, icon, text, tip) => { const x = el('span', cls + (on ? ' on' : '')); x.append(el('b', null, icon), document.createTextNode(text)); x.title = tip; if (!on) x.setAttribute('aria-hidden','true'); t.append(x); };
+    add('read', jobSeen(j), '👁', jobSeen(j) ? 'Read' : 'Not read', 'Marked read once you open the advert, the email and CV, or any button on this role');
+    add('saved', s === 'saved' || s === 'applied', '🔖', 'Saved', 'Saved to look at again');
+    if (f) add('form', true, '📝', f.status === 'sent' ? 'Form submitted' : f.status === 'filled' ? 'Form filled: check it' : f.status === 'problem' ? 'Form: Claude needs help' : 'Form sent to Claude', 'On the Forms to fill list'); else add('form', false, '📝', 'Form', 'Not sent to Claude to fill in');
+    add('sent', !!sent || s === 'applied', '✓', sent ? 'Emailed ' + fmtDay(sent.t) : s === 'applied' ? 'Applied' : 'Not applied', 'Application sent');
+    if (rep) add('reply', true, '⭐', 'Reply ' + fmtDay(rep.t), 'Reply from ' + str(rep.from)); else if (sent) add('reply', false, '⭐', 'No reply yet', 'Waiting for a reply');
+    if (jobClosed(j)) add('closed', true, '🔒', 'Closed', 'Closing date passed or advert taken down');
+    return t;
   }
   /* is the advert still there? checked by the Google service for saved and applied roles */
   const LINKS = {}; let linkBusy = false;
@@ -524,18 +573,23 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     try { const r = await call({action:'linkcheck', items: todo.map(j => ({url: safeUrl(j.url), title: str(j.title)}))}); arr(r.items).forEach(x => LINKS[x.url] = x); todo.forEach(j => { if (!(safeUrl(j.url) in LINKS)) LINKS[safeUrl(j.url)] = {state:'ok'}; }); }
     catch(e){ todo.forEach(j => LINKS[safeUrl(j.url)] = {state:'ok'}); }
     linkBusy = false;
+    if (todo.some(j => LINKS[safeUrl(j.url)] && LINKS[safeUrl(j.url)].state === 'gone')){ if (tab === 'roles') renderRoles(); return; }
+    if (jobs.some(j => safeUrl(j.url) && !(safeUrl(j.url) in LINKS))) setTimeout(() => checkLinks(jobs), 0);
     document.querySelectorAll('p[data-gone-for]').forEach(p => { const j = arr(DATA.jobs).find(x => safeUrl(x.url) === p.dataset.goneFor); if (j) showGone(j, p); });
   }
   function jobCard(j){
     const s = statusOf(j,'job');
     const ck = CATNAME[j.category] ? j.category : 'comms';
-    const c = el('article','slot ' + ck + (s === 'pass' ? ' pass' : ''));
+    const c = el('article','slot ' + ck + (s === 'pass' ? ' pass' : '') + (jobClosed(j) ? ' closed' : '') + (jobReplied(j) ? ' replied' : '') + (!jobSeen(j) ? ' unread' : ''));
+    c.addEventListener('click', e => { if (e.target.closest('a,button') && !jobSeen(j)){ jobSeen(j, true); c.classList.remove('unread'); const tr = c.querySelector('.trail'); if (tr) tr.replaceWith(jobTrail(j)); } });
     const top = el('div','top'); const head = el('div');
     head.append(el('div','cat', CATNAME[ck]), el('h2',null, j.title || 'Untitled role'));
     if (j.employer) head.append(el('div','emp', j.employer));
     head.append(workTag(j));
-    top.append(head, el('span','badge ' + s, {new:'New', saved:'Saved', applied:'Applied', pass:'Not for me'}[s] || 'New'));
-    c.append(top);
+    const rp = jobReplied(j), sn = jobSent(j);
+    const bk = jobClosed(j) && !rp ? ['', 'Closed'] : rp ? ['gold', '⭐ Reply'] : sn ? ['applied', '✓ Emailed'] : [s, {new:'New', saved:'Saved', applied:'Applied', pass:'Not for me'}[s] || 'New'];
+    top.append(head, el('span','badge ' + bk[0], bk[1]));
+    c.append(top, jobTrail(j));
     const meta = el('div','meta');
     if (j.location) meta.append(el('span',null,j.location));
     if (j.hours) meta.append(el('span',null,j.hours));
@@ -788,7 +842,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
 
   /* ---------- forms for Claude to fill ---------- */
   let FORMS = [];
-  async function loadForms(){ if (!api()) return; try { const r = await call({action:'forms'}); FORMS = arr(r.items); formCount(); } catch(e){} }
+  async function loadForms(){ if (!api()) return; try { const r = await call({action:'forms'}); FORMS = arr(r.items); formCount(); renderRoles(); } catch(e){} }
   function formCount(){ const n = FORMS.filter(f => f.status !== 'sent').length; $('ct-forms').textContent = n || ''; }
   function formFor(kind, id){ return FORMS.find(f => f.key === kind + ':' + id); }
   const FORM_STATUS = {waiting:'Waiting for Claude', filled:'Filled in: check and press Submit', sent:'Submitted', problem:'Claude needs help'};
