@@ -1790,7 +1790,11 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     return p;
   }
 
-  function loadCorr(force){ if (force) { CORR = null; corrP = null; } if (!corrP) corrP = call({action:'correspondence'}).then(r => { CORR = { sent: arr(r.sent), inbox: arr(r.inbox), muted: arr(r.muted), account: r.account }; return CORR; }).catch(e => { corrP = null; throw e; }); return corrP; }
+  // Catch automatic acknowledgements the server missed, in English and French (e.g. "Réponse automatique", "Nous avons bien reçu votre candidature").
+  const AUTO_SUBJ = /^\s*(r[ée]ponse automatique|automatic reply|auto(matic)?[- ]?reply|autoreply|out of office|absent|absence|accus[ée] de r[ée]ception|acknowledg(e)?ment)/i;
+  const AUTO_BODY = /(nous avons bien re[çc]u votre (candidature|message|e-?mail|courriel)|accus[ée] de r[ée]ception|sans nouvelles de notre part|ceci est un message automatique|message g[ée]n[ée]r[ée] automatiquement|we have received your (application|email|message)|thank you for your (application|email)[^.]{0,40}(we will|will be)|this is an automated|do not reply to this (email|message)|if you do not hear from us)/i;
+  function looksAuto(i){ return AUTO_SUBJ.test(str(i.subject)) || AUTO_BODY.test(str(i.snippet)); }
+  function loadCorr(force){ if (force) { CORR = null; corrP = null; } if (!corrP) corrP = call({action:'correspondence'}).then(r => { CORR = { sent: arr(r.sent), inbox: arr(r.inbox).map(i => { if (!i.auto && looksAuto(i)) i.auto = true; return i; }), muted: arr(r.muted), account: r.account }; return CORR; }).catch(e => { corrP = null; throw e; }); return corrP; }
   $('corrSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cView = b.dataset.c; document.querySelectorAll('#corrSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderCorr(); });
   function gmailLink(thread){ return 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(CORR.account || '') + '#all/' + encodeURIComponent(thread); }
   // A bounce ("Address not found") names the address that failed; link it to the email that went there.
