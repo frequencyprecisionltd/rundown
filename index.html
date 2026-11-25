@@ -170,6 +170,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 .warn{color:var(--save)} .good{color:var(--ok)}
 .confirm{background:var(--savebg);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+#netWarn{background:#fff3cd;color:#6b4e00;border:1px solid #e0c36a;border-radius:8px;padding:8px 12px;margin:0 0 12px;font-size:14px}
 </style>
 </head>
 <body>
@@ -188,6 +189,7 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
   </form>
 
   <div id="app" hidden>
+    <div id="netWarn" role="status" hidden>Not connected to your Google service from this browser or network, so saved marks, sent emails and form requests may not go through. Try your phone or another network.</div>
     <header style="position:relative">
       <button type="button" class="btn exitbtn" id="exitBtn" title="Go to your public website. Press Login there to come back.">Exit to my website ↗</button>
       <div class="eyebrow"><span class="light" aria-hidden="true"></span><span id="updated">Updated each morning</span></div>
@@ -1068,10 +1070,15 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, await gzip(JSON.stringify(payload))));
     return {v:1, z:1, iter, salt:ub64(salt), iv:ub64(iv), ct:ub64(ct)};
   }
+  let netFails = 0;
+  function netState(ok){ netFails = ok ? 0 : netFails + 1; const w = document.getElementById('netWarn'); if (w) w.hidden = netFails < 2; }
   async function call(body){
     const a = api(); if (!a) throw new Error('off');
-    const r = await fetch(a.url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({token:a.token}, body))});
-    const j = await r.json(); if (!j.ok) throw new Error(j.error || 'failed'); return j;
+    let r, j;
+    try { r = await fetch(a.url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({token:a.token}, body))}); j = await r.json(); }
+    catch(e){ netState(false); throw e; }
+    netState(true);
+    if (!j.ok) throw new Error(j.error || 'failed'); return j;
   }
   function allCvs(){
     const list = [];
@@ -1609,7 +1616,10 @@ textarea.letter{min-height:300px;resize:vertical;line-height:1.55}
     if (!typed && Date.now() - last < 20 * 60000) return; // one entry per sitting
     ls('rundown.lastOpen', String(Date.now()));
     let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch(e){}
-    call({action:'login', dev: deviceId(), ua: navigator.userAgent.slice(0,160), tz, lang: navigator.language || '', how: typed ? 'typed' : 'remembered'}).catch(() => {});
+    const body = {action:'login', dev: deviceId(), ua: navigator.userAgent.slice(0,160), tz, lang: navigator.language || '', how: typed ? 'typed' : 'remembered'};
+    // Wait for the page's first burst of requests to finish, then try up to 3 times so an opening is not lost.
+    const tryIt = n => call(body).catch(() => { if (n < 3) setTimeout(() => tryIt(n + 1), 5000 * n); });
+    setTimeout(() => tryIt(1), 4000);
   }
   async function refreshLogins(){
     const box = $('loginList');
